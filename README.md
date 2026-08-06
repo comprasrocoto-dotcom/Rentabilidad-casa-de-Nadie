@@ -20,23 +20,29 @@ El Sheet debe estar compartido como "Cualquiera con el enlace: Lector".
 |---|---|
 | VENTAS | ventas base y neta, unidades, rankings por articulo y familia, clasificacion Cocina/Bar |
 | COMPRAS | compras netas por proveedor, familia, articulo, mes y centro de costos |
-| INVENTARIOS | valor inventariado, variaciones, faltantes y sobrantes |
+| INVENTARIOS | valor inventariado por conteo: inventario inicial e inventario final |
 
-Opcionales: si se agregan las hojas MERCANCIA VENDIDA o RENTABILIDAD, el dashboard
-las detecta solo y las usa como fuente preferente de costo y margen.
+Opcional: si se agrega la hoja RENTABILIDAD, el dashboard la detecta sola y la usa
+como fuente preferente de margen teorico por articulo.
 
 ## Pestanas
 
-Resumen, Ventas, Compras, Costo (food cost), Rentabilidad, Participacion,
-Inventarios y Ajustes de inventario (con buscador, paginacion y exportacion a Excel).
+Resumen, Ventas, Compras, Costo, Rentabilidad, Participacion, Inventarios y
+Mercancia Vendida (juego de inventarios con exportacion a Excel).
 
 ## Notas de calculo
 
 - El parser es tolerante a los nombres de columna: busca por palabras clave, no por posicion exacta.
 - Los numeros se leen en formato es-CO (punto de mil, coma decimal, simbolo de moneda).
-- Sin hoja de mercancia vendida, el costo se calcula como compras netas / ventas base:
-  es un food cost de compras, util para tendencia pero no exacto para cierre contable.
-  Con dos meses de conteo en INVENTARIOS se habilita el costo con ajuste de inventario.
+- Base de todos los indicadores y porcentajes: el valor de las VENTAS.
+- Mercancia Vendida = Inventario Inicial + Compras - Inventario Final.
+  Excel equivalente: =+[@[Inv Inicial]]+[@Compras]-([@[Inv Final]])
+- Costo Mercancia Vendida (%) = Mercancia Vendida / Ventas.
+  Excel equivalente: =+[@[Mercancia vendida]]/[@[Ventas]]
+- Con un solo conteo de inventario la mercancia vendida cae a las compras del periodo
+  y el dashboard lo indica de forma explicita.
+- Rentabilidad por articulo: el costo unitario sale UNICAMENTE del precio de compra
+  del insumo (promedio ponderado de COMPRAS, solo articulos comprados por unidad).
 - Meta de food cost: 35%.
 
 ## Despliegue
