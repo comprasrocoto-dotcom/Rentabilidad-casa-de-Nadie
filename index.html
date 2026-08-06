@@ -413,7 +413,7 @@ function cleanSede(v){
 /* ====================== ESTADO ====================== */
 var RAW = {ventas:[], compras:[], inv:[], mv:[], rent:[]};
 var FILTERED = {ventas:[], compras:[], inv:[], mv:[], rent:[]};
-var CC_MAP = {};
+var CC_MAP = {}, FAM_CC = {};
 var COST_MAP = {};
 var F = {mes:"all", sede:"all", cc:"all"};
 var CHARTS = {};
@@ -477,12 +477,21 @@ function syncFromDrive(){
 }
 </script><script>
 /* ====================== PARSEO DEL EXCEL ====================== */
-function findSheet(wb,kws){
-  for(var i=0;i<wb.SheetNames.length;i++){
-    var n=wb.SheetNames[i], u=up(n);
-    for(var j=0;j<kws.length;j++){ if(u.indexOf(kws[j])>=0) return wb.Sheets[n]; }
+/* Busca la hoja por palabra clave con puntaje: nombre exacto > empieza por > contiene.
+   Necesario porque "INVENTARIOS" contiene la subcadena "VENTA". */
+function findSheet(wb,kws,avoid){
+  var names=wb.SheetNames, best=null, bestScore=0;
+  for(var i=0;i<names.length;i++){
+    var u=up(names[i]).replace(/\s+/g," ").trim(), skip=false;
+    if(avoid){ for(var a=0;a<avoid.length;a++){ if(u.indexOf(avoid[a])>=0) skip=true; } }
+    if(skip) continue;
+    for(var j=0;j<kws.length;j++){
+      var k=kws[j], sc=0;
+      if(u===k) sc=3; else if(u.indexOf(k)===0) sc=2; else if(u.indexOf(k)>=0) sc=1;
+      if(sc>bestScore){ bestScore=sc; best=names[i]; }
+    }
   }
-  return null;
+  return bestScore>0? wb.Sheets[best] : null;
 }
 function J(sh,opt){
   if(!sh) return [];
@@ -490,12 +499,20 @@ function J(sh,opt){
   try{ return XLSX.utils.sheet_to_json(sh,o); }catch(e){ console.warn("sheet_to_json:",e.message); return []; }
 }
 var AKW=["artic","artíc","art"];
+/* true cuando la unidad de compra coincide con la unidad de venta (pieza),
+   para no comparar un precio por plato contra un costo por gramo */
+function unitLike(s){
+  s=String(s==null?"":s).toLowerCase().trim();
+  if(s==="") return true;
+  return s.indexOf("unidad")>=0 || s.indexOf("und")>=0 || s.indexOf("botella")>=0 ||
+         s.indexOf("lata")>=0 || s.indexOf("copa")>=0;
+}
 
 function parseExcel(wb){
   console.log("Hojas encontradas:", wb.SheetNames.join(" | "));
 
   /* ---------- VENTAS ---------- */
-  var shV=findSheet(wb,["VENTA"]);
+  var shV=findSheet(wb,["VENTA"],["INVENTARIO","MERCANC"]);
   RAW.ventas=[];
   J(shV).forEach(function(r){
     var neto=colN(r,["neto"]), base=colN(r,["base"]);
@@ -517,11 +534,13 @@ function parseExcel(wb){
   });
 
   /* mapa articulo -> centro de costos con mas unidades */
-  CC_MAP={};
+  CC_MAP={}; FAM_CC={};
   RAW.ventas.forEach(function(r){
     if(r.ccRaw==="Cocina"||r.ccRaw==="Bar"){
       if(!CC_MAP[r.art]) CC_MAP[r.art]={Cocina:0,Bar:0};
       CC_MAP[r.art][r.ccRaw]+=r.uds;
+      if(!FAM_CC[r.fam]) FAM_CC[r.fam]={Cocina:0,Bar:0};
+      FAM_CC[r.fam][r.ccRaw]+=r.uds;
     }
   });
   RAW.ventas.forEach(function(r){
@@ -543,7 +562,7 @@ function parseExcel(wb){
       cc:normCC(col(r,["centr"])),
       prov:up(col(r,["proveedor"]))||"SIN PROVEEDOR",
       fam:up(col(r,["familia"]))||"SIN FAMILIA",
-      art:art, doc:col(r,["serie"]),
+      art:art, doc:col(r,["serie"]), subart:col(r,["subart"]),
       uds:colN(r,["uds","unid"]),
       unit:colN(r,["unitario"]),
       total:total
@@ -554,6 +573,7 @@ function parseExcel(wb){
   COST_MAP={};
   RAW.compras.forEach(function(r){
     if(!r.uds) return;
+    if(!unitLike(r.subart)) return;   /* comprado por gramo/ml: no comparable con el precio de venta */
     if(!COST_MAP[r.art]) COST_MAP[r.art]={t:0,u:0};
     COST_MAP[r.art].t+=Math.abs(r.total);
     COST_MAP[r.art].u+=Math.abs(r.uds);
@@ -568,15 +588,16 @@ function parseExcel(wb){
     if(!sede || !art) return;
     var unit=colN(r,["coste unitario","costo unitario","unitario"]);
     var va=colN(r,["variaci"]);
+    var sub=col(r,["subart"]);
     RAW.inv.push({
       sede:sede, cc:normCC(col(r,["centr"])), mes:mes3(col(r,["mes"])),
       fam:up(col(r,["familia"]))||"SIN FAMILIA", subfam:up(col(r,["subfamilia"])),
-      art:art, doc:col(r,["serie"]), fecha:col(r,["fecha"]),
+      art:art, doc:col(r,["serie"]), fecha:col(r,["fecha"]), subart:sub,
       unit:unit, stock_sys:colN(r,["stock a fecha"]), stock_inv:colN(r,["stock inventario"]),
       variacion:va, total:colN(r,["total"]), ajuste:va*unit,
       estado:(va<0? "Faltante" : (va>0? "Sobrante":"Cuadrado"))
     });
-    if(unit>0 && !COST_MAP[art]) COST_MAP[art]={t:unit,u:1};
+    if(unit>0 && unitLike(sub) && !COST_MAP[art]) COST_MAP[art]={t:unit,u:1};
   });
 
   /* ---------- MERCANCIA VENDIDA (opcional) ---------- */
@@ -610,7 +631,9 @@ function parseExcel(wb){
 function ccOf(art,fam){
   if(BAR_FAMS[fam]) return "Bar";
   var m=CC_MAP[art];
-  if(m) return (m.Bar>m.Cocina)? "Bar" : "Cocina";
+  if(m && (m.Bar||m.Cocina)) return (m.Bar>m.Cocina)? "Bar" : "Cocina";
+  var f=FAM_CC[fam];
+  if(f && (f.Bar||f.Cocina)) return (f.Bar>f.Cocina)? "Bar" : "Cocina";
   return "Bar";
 }
 function unitCost(art){
@@ -1183,7 +1206,7 @@ function renderRent(){
       : "<b>Sin hoja RENTABILIDAD.</b> El costo unitario se toma del promedio ponderado de <b>COMPRAS</b> "+
         "(y del <i>Coste Unitario</i> de INVENTARIOS como respaldo), cruzado por nombre de art&iacute;culo. "+
         "Cobertura: <b>"+REN_ITEMS.length+" de "+totalArts+"</b> art&iacute;culos vendidos tienen costo cruzable "+
-        "(t&iacute;pico en bar y bebidas; los platos de cocina requieren receta para costearse). "+
+        "(solo se cruzan art&iacute;culos comprados <b>por unidad</b>: comparar un precio por plato contra un costo por gramo dar&iacute;a un margen falso, as&iacute; que los platos de cocina requieren receta para costearse). "+
         "Se excluyen tarifas de personal y domicilios.";
   }
   if(!REN_ITEMS.length){
