@@ -220,11 +220,10 @@ padding:16px;width:100%;font-size:.76rem;cursor:pointer}
   <div class="card"><h3>Evoluci&oacute;n Mes a Mes</h3><div class="cw h300"><canvas id="c-cos-mes"></canvas></div></div>
  </div>
  <div class="row2">
-  <div class="card"><h3>Detalle Cocina <em>sede &middot; mes</em></h3><div id="d-cos-cocina"></div></div>
-  <div class="card"><h3>Detalle Bar <em>sede &middot; mes</em></h3><div id="d-cos-bar"></div></div>
+  <div class="card"><h3>Detalle Cocina <em>merc. vendida / ventas</em></h3><div id="d-cos-cocina"></div></div>
+  <div class="card"><h3>Detalle Bar <em>merc. vendida / ventas</em></h3><div id="d-cos-bar"></div></div>
  </div>
- <div class="card"><h3>Juego de Inventarios <em>inv. inicial + compras - inv. final</em></h3><div id="d-cos-mv"></div></div>
-</section>
+ </section>
 
 <section id="sec-rent">
  <div class="note" id="ren-note"></div>
@@ -1000,6 +999,19 @@ function mvSrcNote(){
   return "solo Compras (se requieren dos conteos de inventario; hoy hay "+ims.length+")";
 }
 function mvSrcShort(){ return (invMonths().length>=2)? "Ini + Compras - Final" : "Solo compras (falta 2do conteo)"; }
+/* Mercancia Vendida de un mes: inv. del conteo anterior + compras del mes - inv. del conteo del mes */
+function mvMes(pred,mes){
+  var com=0;
+  FILTERED.compras.forEach(function(r){ if(r.mes===mes && pred(r)) com+=r.total; });
+  var ims=invMonths(), idx=ims.indexOf(mes);
+  if(idx<1) return com;
+  var mPrev=ims[idx-1], ini=0, fin=0;
+  FILTERED.inv.forEach(function(r){
+    if(!pred(r)) return;
+    if(r.mes===mPrev) ini+=r.total; else if(r.mes===mes) fin+=r.total;
+  });
+  return ini+com-fin;
+}
 function invMonths(){ return uniq(FILTERED.inv,"mes").sort(mesSort); }
 function invValor(mes){
   var t=0; FILTERED.inv.forEach(function(r){ if(!mes||r.mes===mes) t+=r.total; }); return t;
@@ -1101,12 +1113,19 @@ function renderCompras(){
 
 /* ====================== 4. COSTO ====================== */
 function costRows(cc){
-  var vs=keyAgg(FILTERED.ventas.filter(function(r){return r.ccBiz===cc;}),
-                function(r){ return r.sede+" \u00b7 "+r.mes.toUpperCase(); },"base");
-  var cs=keyAgg(FILTERED.compras.filter(function(r){return r.cc===cc;}),
-                function(r){ return r.sede+" \u00b7 "+r.mes.toUpperCase(); },"total");
   var out=[];
-  for(var k in vs){ if(vs[k]>0 && cs[k]>0) out.push({k:k,ventas:vs[k],pct:safeDiv(cs[k],vs[k])*100}); }
+  var sedes=uniq(FILTERED.ventas,"sede").sort();
+  var meses=uniq(FILTERED.ventas,"mes").sort(mesSort);
+  sedes.forEach(function(s){
+    meses.forEach(function(m){
+      var ven=0;
+      FILTERED.ventas.forEach(function(r){ if(r.sede===s && r.mes===m && r.ccBiz===cc) ven+=r.base; });
+      if(!(ven>0)) return;
+      var mv=mvMes(function(r){ return r.sede===s && r.cc===cc; }, m);
+      if(!(mv>0)) return;
+      out.push({k:s+" \u00b7 "+m.toUpperCase(), ventas:ven, pct:safeDiv(mv,ven)*100});
+    });
+  });
   out.sort(function(a,b){ return b.ventas-a.ventas; });
   return out;
 }
@@ -1154,7 +1173,7 @@ function renderCosto(){
   var series=sedes.map(function(s){
     return {name:s, data:ms.map(function(m){
       var vv=sumBy(FILTERED.ventas.filter(function(r){return r.sede===s&&r.mes===m;}),"base");
-      var cc2=sumBy(FILTERED.compras.filter(function(r){return r.sede===s&&r.mes===m;}),"total");
+      var cc2=mvMes(function(r){return r.sede===s;},m);
       return +(safeDiv(cc2,vv)*100).toFixed(1);
     })};
   });
@@ -1163,28 +1182,6 @@ function renderCosto(){
   semRows("d-cos-cocina",costRows("Cocina"));
   semRows("d-cos-bar",costRows("Bar"));
 
-  /* juego de inventarios: requiere 2 conteos */
-  var el=document.getElementById("d-cos-mv"); if(!el) return;
-  var ims=invMonths();
-  if(ims.length<2){
-    el.innerHTML='<div class="empty"><span class="ei">&#128465;</span><span>Se necesitan al menos <b>dos meses de conteo</b> '+
-      'en la hoja INVENTARIOS para calcular la mercanc&iacute;a vendida real.<br>Hoy hay '+ims.length+
-      ' conteo(s): '+(ims.join(", ").toUpperCase()||"ninguno")+'.</span></div>';
-    return;
-  }
-  var rows=[];
-  for(var i=1;i<ims.length;i++){
-    var mPrev=ims[i-1], mCur=ims[i];
-    ["Cocina","Bar"].forEach(function(cc){
-      var ini=sumBy(FILTERED.inv.filter(function(r){return r.mes===mPrev&&r.cc===cc;}),"total");
-      var fin=sumBy(FILTERED.inv.filter(function(r){return r.mes===mCur&&r.cc===cc;}),"total");
-      var com=sumBy(FILTERED.compras.filter(function(r){return r.mes===mCur&&r.cc===cc;}),"total");
-      var ven=sumBy(FILTERED.ventas.filter(function(r){return r.mes===mCur&&r.ccBiz===cc;}),"base");
-      var mvv=ini+com-fin;
-      if(ven>0) rows.push({k:cc+" \u00b7 "+mCur.toUpperCase(),ventas:ven,pct:safeDiv(mvv,ven)*100});
-    });
-  }
-  semRows("d-cos-mv",rows);
 }
 </script><script>
 /* ====================== 5. RENTABILIDAD ====================== */
