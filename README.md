@@ -22,14 +22,43 @@ El Sheet debe estar compartido como "Cualquiera con el enlace: Lector".
 | COMPRAS | compras netas por proveedor, familia, articulo, mes y centro de costos |
 | INVENTARIOS | valor inventariado por conteo. Cada fecha de documento es un conteo: el primero del periodo es el Inventario Inicial y el segundo el Inventario Final |
 
-Opcional: si se agrega la hoja RENTABILIDAD, el dashboard la detecta sola y la usa
-como fuente preferente de margen teorico por articulo.
+| RENTABILIDAD | ficha tecnica por articulo (Precio, Base, Coste, Margen). Es la unica fuente
+de la pestana Rentabilidad y la primera opcion de costo unitario en Analisis Comercial |
+
+El encabezado de cada hoja se detecta solo (no tiene que estar en la fila 1) y las
+columnas se buscan por palabras clave, asi que renombrarlas no rompe el tablero.
 
 ## Pestanas
 
 Resumen, Ventas, Compras, Costo, Rentabilidad, Participacion, Inventarios,
-Mercancia Vendida (juego de inventarios con exportacion a Excel) y Nuevo Modulo
-(estructura y navegacion listas, contenido pendiente).
+Mercancia Vendida (juego de inventarios con exportacion a Excel) y Analisis Comercial.
+
+### Analisis Comercial
+
+Tablero ejecutivo para decidir que impulsar en la carta. Consolida ventas, costos y
+rentabilidad del mismo periodo filtrado:
+
+- Nueve indicadores globales: venta total, base neta, costo total, utilidad bruta,
+  margen bruto, ticket promedio, productos vendidos, numero de facturas y costo
+  promedio por plato.
+- Rankings: mejor margen, mas vendidos por unidades, mayor utilidad total y bajo margen.
+- Productos que los meseros deben ofrecer primero: puntaje automatico que pesa
+  margen 40%, rotacion 30% y utilidad 30%.
+- Ingenieria del Menu (Kasavana-Smith): Estrella, Caballo de batalla, Rompecabezas y Perro.
+  El umbral de popularidad es el 70% de las unidades promedio; la rentabilidad se mide
+  con el margen de contribucion unitario frente al promedio ponderado.
+- Graficos: top 10 mas rentables, top 10 mas vendidos, top 10 mayor utilidad,
+  ventas por familia, costos por familia, participacion por categoria y tendencia mensual.
+
+Costo por producto, en este orden de prioridad:
+
+1. Ficha tecnica: columna Coste de la hoja RENTABILIDAD.
+2. Precio de compra: costo unitario promedio del insumo en COMPRAS.
+3. Tasa de su centro de costos, calibrada para que la suma de los costos por producto
+   cuadre exactamente con la Mercancia Vendida del periodo.
+
+El tercer paso es el que garantiza que el modulo no invente cifras: por construccion
+suma lo mismo que el juego de inventarios.
 
 ## Notas de calculo
 
@@ -49,8 +78,18 @@ Mercancia Vendida (juego de inventarios con exportacion a Excel) y Nuevo Modulo
 - Utilidad Bruta = Ventas Base Neta - Mercancia Vendida. Su % se calcula sobre las ventas.
 - Con un solo conteo en el periodo el juego de inventarios no es aplicable: la mercancia
   vendida cae a las compras del periodo y el dashboard lo indica de forma explicita.
-- Rentabilidad por articulo: el costo unitario sale UNICAMENTE del precio de compra
-  del insumo (promedio ponderado de COMPRAS, solo articulos comprados por unidad).
+- Compras del juego de inventarios: solo se toman las compras cuyo Centro de Costo es
+  Bar o Cocina. Todo lo demas (aseo, papeleria, utensilios, etc.) queda fuera del calculo
+  y se muestra aparte en la pestana Compras para que el descarte sea auditable.
+- Todas las tarjetas del Resumen muestran el valor resumido en millones y, debajo,
+  el valor exacto en pesos.
+- La pestana Rentabilidad no recalcula nada: lee la hoja RENTABILIDAD tal como esta.
+  Filtra por Sede y Centro de Costos, descarta las tarifas de Rappi, personal y empleados,
+  y aparta como atipicos los registros con Coste fuera del rango 0-100% del precio
+  (se listan en la tabla, pero no entran en promedios ni graficos).
+- Margen de la hoja RENTABILIDAD = Coste / Precio, es decir food cost, no utilidad.
+- Los graficos de una pestana oculta se redimensionan al mostrarla, para que las barras
+  y sus etiquetas queden alineadas.
 - Meta de food cost: 35%.
 
 ## Despliegue
