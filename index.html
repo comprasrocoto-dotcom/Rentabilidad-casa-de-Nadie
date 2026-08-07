@@ -144,6 +144,7 @@ padding:16px;width:100%;font-size:.76rem;cursor:pointer}
  <button onclick="showTab('sec-part',this)">&#128200; Participaci&oacute;n</button>
  <button onclick="showTab('sec-inv',this)">&#128230; Inventarios</button>
  <button onclick="showTab('sec-mv',this)">&#129518; Mercanc&iacute;a Vendida</button>
+ <button onclick="showTab('sec-nuevo',this)">&#10133; Nuevo M&oacute;dulo</button>
 </nav>
 
 <div class="fbar" id="fbar" style="display:none">
@@ -168,6 +169,7 @@ padding:16px;width:100%;font-size:.76rem;cursor:pointer}
 <main id="app" style="display:none">
 
 <section id="sec-resumen" class="active">
+ <div class="note" id="res-note"></div>
  <div class="grid" id="k-res"></div>
  <div class="row2">
   <div class="card"><h3>Ventas por Centro de Costos <em>base neta</em></h3><div class="cw h300"><canvas id="c-res-cc"></canvas></div></div>
@@ -302,6 +304,16 @@ padding:16px;width:100%;font-size:.76rem;cursor:pointer}
  <div class="card"><h3>Compras por Familia <em>insumo del per&iacute;odo</em></h3><div class="cw h420"><canvas id="c-mv-fam"></canvas></div></div>
 </section>
 
+<section id="sec-nuevo">
+ <div class="note" id="nuevo-note"></div>
+ <div class="grid" id="k-nuevo"></div>
+ <div class="row2">
+  <div class="card"><h3>Bloque 1 <em>pendiente</em></h3><div class="cw h300"><div class="ctr" id="nuevo-b1"></div></div></div>
+  <div class="card"><h3>Bloque 2 <em>pendiente</em></h3><div class="cw h300"><div class="ctr" id="nuevo-b2"></div></div></div>
+ </div>
+ <div class="card"><h3>Tabla de detalle <em>pendiente</em></h3><div id="t-nuevo"></div></div>
+</section>
+
 </main>
 <script>
 "use strict";
@@ -314,6 +326,10 @@ var META     = 35;            /* meta de food cost % */
 var LOCALE   = "es-CO";
 
 var MONTHS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+/* las propinas nunca entran en la base neta de ventas */
+var PROPINA_RE = /PROPIN|TIP\b|SERVICIO VOLUNTARIO/i;
+var PROPINAS_BASE = 0;
 
 /* familias que no son producto real -> fuera de rankings */
 var EXCLUIR_FAMS = {};
@@ -512,27 +528,31 @@ function unitLike(s){
 
 function parseExcel(wb){
   console.log("Hojas encontradas:", wb.SheetNames.join(" | "));
+  PROPINAS_BASE = 0;
 
   /* ---------- VENTAS ---------- */
   var shV=findSheet(wb,["VENTA"],["INVENTARIO","MERCANC"]);
   RAW.ventas=[];
   J(shV).forEach(function(r){
     var neto=colN(r,["neto"]), base=colN(r,["base"]);
-    if(!(neto>0 && base>0)) return;
     var art=up(col(r,AKW)); if(!art) return;
+    if(!base && !neto) return;
+    var famv=up(col(r,["familia"]));
     RAW.ventas.push({
       sede:cleanSede(col(r,["establec","sede","almac"])),
       tarifa:col(r,["tarifa"]),
       tipo:col(r,["tipo documento","tipo"]),
       mes:mes3(col(r,["mes"])),
-      fam:up(col(r,["familia"])),
+      fam:famv,
       art:art,
+      esPropina:(PROPINA_RE.test(famv)||PROPINA_RE.test(art)),
       ccRaw:normCC(col(r,["centr"])),
       uds:colN(r,["uds","unid"]),
       subtotal:colN(r,["subtotal"]),
       dcto:Math.abs(colN(r,["importe descuento"])),
       base:base, neto:neto
     });
+    if(PROPINA_RE.test(famv)||PROPINA_RE.test(art)) PROPINAS_BASE+=base;
   });
 
   /* mapa articulo -> centro de costos con mas unidades */
@@ -540,9 +560,9 @@ function parseExcel(wb){
   RAW.ventas.forEach(function(r){
     if(r.ccRaw==="Cocina"||r.ccRaw==="Bar"){
       if(!CC_MAP[r.art]) CC_MAP[r.art]={Cocina:0,Bar:0};
-      CC_MAP[r.art][r.ccRaw]+=r.uds;
+      CC_MAP[r.art][r.ccRaw]+=Math.max(0,r.uds);
       if(!FAM_CC[r.fam]) FAM_CC[r.fam]={Cocina:0,Bar:0};
-      FAM_CC[r.fam][r.ccRaw]+=r.uds;
+      FAM_CC[r.fam][r.ccRaw]+=Math.max(0,r.uds);
     }
   });
   RAW.ventas.forEach(function(r){
@@ -571,15 +591,8 @@ function parseExcel(wb){
     });
   });
 
-  /* costo unitario promedio ponderado por articulo (para margenes) */
+  /* el costo unitario se reconstruye en applyFilter con las compras del periodo */
   COST_MAP={};
-  RAW.compras.forEach(function(r){
-    if(!r.uds) return;
-    if(!unitLike(r.subart)) return;   /* comprado por gramo/ml: no comparable con el precio de venta */
-    if(!COST_MAP[r.art]) COST_MAP[r.art]={t:0,u:0};
-    COST_MAP[r.art].t+=Math.abs(r.total);
-    COST_MAP[r.art].u+=Math.abs(r.uds);
-  });
 
   /* ---------- INVENTARIOS ---------- */
   var shI=findSheet(wb,["INVENTARIO"]);
@@ -678,12 +691,16 @@ function applyFilter(){
   function okMes(r){ return m==="all" || r.mes===m; }
   function okCC(r){ return cc==="all" || r.cc===cc; }
 
-  FILTERED.ventas = RAW.ventas.filter(function(r){ return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
-  /* PLANTA no esta en el selector pero sus compras siguen visibles */
-  FILTERED.compras = RAW.compras.filter(function(r){ return okMes(r) && (sd==="all"||r.sede===sd||r.esPlanta) && okCC(r); });
-  FILTERED.inv = RAW.inv.filter(function(r){ return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
-  FILTERED.mv = RAW.mv.filter(function(r){ return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
-  FILTERED.rent = RAW.rent.slice();
+  FILTERED.ventas  = RAW.ventas.filter(function(r){  return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  FILTERED.compras = RAW.compras.filter(function(r){ return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  FILTERED.inv     = RAW.inv.filter(function(r){     return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  FILTERED.mv      = RAW.mv.filter(function(r){      return okMes(r) && (sd==="all"||r.sede===sd) && okCC(r); });
+  FILTERED.rent    = RAW.rent.slice();
+
+  /* un solo motor de calculo por periodo: todos los modulos leen de aqui */
+  buildCostMap();
+  CALC = null; CALC = calc();
+  if(PROPINAS_BASE) console.warn("Se excluyeron " + fmtCOP(PROPINAS_BASE) + " de propinas de la base neta de ventas.");
 
   var chip=document.getElementById("chip");
   if(chip){
@@ -970,56 +987,121 @@ function keyAgg(rows,keyFn,metric){
   rows.forEach(function(r){ var k=keyFn(r); if(!k) return; m[k]=(m[k]||0)+(+r[metric]||0); });
   return m;
 }
-function ventasTot(){ return FILTERED.mv.length? sumBy(FILTERED.mv,"ventas") : sumBy(FILTERED.ventas,"base"); }
-function comprasTot(){ return sumBy(FILTERED.compras,"total"); }
-function invIniFin(){
-  var ims=invMonths();
-  if(ims.length<2) return {ok:false,ini:0,fin:0,ims:ims};
-  return {ok:true,ini:invValor(ims[0]),fin:invValor(ims[ims.length-1]),ims:ims};
+function ventasTot(){ return C().ventas; }
+function comprasTot(){ return C().compras; }
+
+/* ==========================================================================
+   MOTOR DE CALCULO - FUENTE UNICA DE VERDAD
+   Ventas          = suma de la Base Neta de VENTAS (sin IVA, sin propinas)
+   Inv. Inicial    = primer conteo de inventario del periodo seleccionado
+   Inv. Final      = segundo (ultimo) conteo de inventario del periodo
+   Mercancia Vend. = Inv. Inicial + Compras - Inv. Final
+   Costo Global %  = Mercancia Vendida / Ventas
+   Utilidad Bruta  = Ventas - Mercancia Vendida
+   Todo el dashboard consume calc(); nadie recalcula por su cuenta.
+   ========================================================================== */
+var CALC = null;
+function TRUE_PRED(){ return true; }
+
+/* orden cronologico a partir de la fecha del documento (dd/mm/aaaa) */
+function dateOrd(f,mes){
+  var s = String(f==null? "" : f).trim();
+  var m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  if(m){ var y=+m[3]; if(y<100) y+=2000; return y*10000 + (+m[2])*100 + (+m[1]); }
+  var mi = MONTHS.indexOf(mes3(mes));
+  return 20000000 + ((mi<0?0:mi)+1)*100 + 50;
 }
-/* Mercancia Vendida = Inv Inicial + Compras - Inv Final  (sobre el subconjunto que cumpla pred) */
-function mvBy(pred){
-  var com=0;
-  FILTERED.compras.forEach(function(r){ if(pred(r)) com+=r.total; });
-  var ims=invMonths();
-  if(ims.length<2) return com;
-  var m0=ims[0], m1=ims[ims.length-1], ini=0, fin=0;
+/* un conteo = un documento de inventario (una fecha), ordenados cronologicamente */
+function invConteos(pred){
+  var p = pred || TRUE_PRED, m = {};
   FILTERED.inv.forEach(function(r){
-    if(!pred(r)) return;
-    if(r.mes===m0) ini+=r.total; else if(r.mes===m1) fin+=r.total;
+    if(!p(r)) return;
+    var k = String(r.fecha || r.mes || "");
+    if(!m[k]) m[k] = {key:k, fecha:r.fecha, mes:r.mes, ord:dateOrd(r.fecha,r.mes), total:0};
+    m[k].total += r.total;
   });
-  return ini+com-fin;
+  var a = []; for(var k in m) a.push(m[k]);
+  a.sort(function(x,y){ return x.ord - y.ord; });
+  return a;
 }
-function mvTot(){ return mvBy(function(){ return true; }); }
-/* Costo Mercancia Vendida % = Mercancia Vendida / Ventas */
-function mvPct(){ return safeDiv(mvTot(),ventasTot())*100; }
-function mvSrcNote(){
-  var ims=invMonths();
-  if(ims.length>=2) return "Inv. Inicial ("+ims[0].toUpperCase()+") + Compras - Inv. Final ("+ims[ims.length-1].toUpperCase()+")";
-  return "solo Compras (se requieren dos conteos de inventario; hoy hay "+ims.length+")";
+function calc(pred){
+  var p = pred || TRUE_PRED;
+  var ventas = 0, compras = 0;
+  FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r)) ventas += r.base; });
+  FILTERED.compras.forEach(function(r){ if(p(r)) compras += r.total; });
+
+  var cs = invConteos(p);
+  var ini=0, fin=0, hasIni=false, hasFin=false, fIni="", fFin="";
+  if(cs.length >= 2){
+    ini = cs[0].total;               hasIni = true; fIni = cs[0].fecha || cs[0].key;
+    fin = cs[cs.length-1].total;     hasFin = true; fFin = cs[cs.length-1].fecha || cs[cs.length-1].key;
+  } else if(cs.length === 1){
+    /* un solo conteo: por su fecha se sabe si es el de apertura o el de cierre */
+    var dia = cs[0].ord % 100;
+    if(dia <= 15){ ini = cs[0].total; hasIni = true; fIni = cs[0].fecha || cs[0].key; }
+    else         { fin = cs[0].total; hasFin = true; fFin = cs[0].fecha || cs[0].key; }
+  }
+  var completo = (hasIni && hasFin);
+  /* sin los dos conteos el juego de inventarios no es aplicable: se usan las compras del periodo */
+  var mv = completo ? (ini + compras - fin) : compras;
+  return {
+    ventas:ventas, compras:compras,
+    invIni:ini, invFin:fin, hasIni:hasIni, hasFin:hasFin, fIni:fIni, fFin:fFin,
+    conteos:cs.length, completo:completo,
+    mv:mv,
+    costoPct:safeDiv(mv,ventas)*100,
+    utilidad:ventas-mv,
+    utilidadPct:safeDiv(ventas-mv,ventas)*100
+  };
 }
-function mvSrcShort(){ return (invMonths().length>=2)? "Ini + Compras - Final" : "Solo compras (falta 2do conteo)"; }
-/* Mercancia Vendida de un mes: inv. del conteo anterior + compras del mes - inv. del conteo del mes */
-function mvMes(pred,mes){
-  var com=0;
-  FILTERED.compras.forEach(function(r){ if(r.mes===mes && pred(r)) com+=r.total; });
-  var ims=invMonths(), idx=ims.indexOf(mes);
-  if(idx<1) return com;
-  var mPrev=ims[idx-1], ini=0, fin=0;
-  FILTERED.inv.forEach(function(r){
-    if(!pred(r)) return;
-    if(r.mes===mPrev) ini+=r.total; else if(r.mes===mes) fin+=r.total;
+/* resultado global del periodo filtrado (cacheado por applyFilter) */
+function C(){ if(!CALC) CALC = calc(); return CALC; }
+
+/* costo unitario por articulo: SOLO precio de compra, y solo del periodo filtrado */
+function buildCostMap(){
+  COST_MAP = {};
+  FILTERED.compras.forEach(function(r){
+    if(!r.uds) return;
+    if(!unitLike(r.subart)) return;
+    if(!COST_MAP[r.art]) COST_MAP[r.art] = {t:0,u:0};
+    COST_MAP[r.art].t += Math.abs(r.total);
+    COST_MAP[r.art].u += Math.abs(r.uds);
   });
-  return ini+com-fin;
 }
+
+/* ---- envoltorios: nombres historicos, un unico motor detras ---- */
+function mvTot(){ return C().mv; }
+function mvPct(){ return C().costoPct; }
+function mvBy(pred){ return calc(pred).mv; }
+function mvMes(pred,mes){ return calc(function(r){ return r.mes===mes && (!pred || pred(r)); }).mv; }
 function invMonths(){ return uniq(FILTERED.inv,"mes").sort(mesSort); }
-function invValor(mes){
-  var t=0; FILTERED.inv.forEach(function(r){ if(!mes||r.mes===mes) t+=r.total; }); return t;
+function invValor(mes){ var t=0; FILTERED.inv.forEach(function(r){ if(!mes||r.mes===mes) t+=r.total; }); return t; }
+function conteoLbl(c,cual){
+  if(cual==="ini") return c.hasIni ? ("1er conteo "+(c.fIni||"")) : "Sin 1er conteo del periodo";
+  return c.hasFin ? ("2do conteo "+(c.fFin||"")) : "Sin 2do conteo del periodo";
 }
+function mvSrcNote(){
+  var c = C();
+  if(c.completo) return "Inv. Inicial del " + c.fIni + " + Compras - Inv. Final del " + c.fFin;
+  if(c.conteos === 1) return "solo Compras del periodo: hay un unico conteo (" + (c.fIni||c.fFin) + "), falta el conteo de " +
+    (c.hasFin ? "apertura" : "cierre") + " para aplicar el juego de inventarios";
+  return "solo Compras del periodo: no hay conteos de inventario en el rango seleccionado";
+}
+function mvSrcShort(){ var c=C(); return c.completo ? "Ini + Compras - Final" : "Solo compras (falta 1 conteo)"; }
+function periodoLbl(){
+  var p = [];
+  p.push(F.mes==="all" ? "todos los meses" : F.mes.toUpperCase());
+  p.push(F.sede==="all" ? "todas las sedes" : F.sede);
+  p.push(F.cc==="all" ? "todos los centros" : F.cc);
+  return p.join(" \u00b7 ");
+}
+/* predicado de centro de costos valido para ventas (ccBiz), compras e inventario (cc) */
+function ccPred(k){ return function(r){ return (r.ccBiz || r.cc) === k; }; }
+
 
 /* ====================== RENDER MAESTRO ====================== */
 function renderAll(){
-  var fns=[renderResumen,renderVentas,renderCompras,renderCosto,renderRent,renderPart,renderInv,renderMV];
+  var fns=[renderResumen,renderVentas,renderCompras,renderCosto,renderRent,renderPart,renderInv,renderMV,renderNuevo];
   for(var i=0;i<fns.length;i++){
     try{ fns[i](); }catch(e){ console.warn("Render "+i+" falló: "+e.message); }
   }
@@ -1027,32 +1109,36 @@ function renderAll(){
 
 /* ====================== 1. RESUMEN ====================== */
 function renderResumen(){
-  var v=ventasTot(), c=comprasTot(), mv=mvTot(), cg=safeDiv(mv,v)*100;
-  var ims=invMonths(), hay=ims.length>=2;
-  var ini=hay? invValor(ims[0]) : 0;
-  var fin=hay? invValor(ims[ims.length-1]) : 0;
+  var c = C();
+  var nt = document.getElementById("res-note");
+  if(nt) nt.innerHTML =
+    "<b>Periodo: " + periodoLbl() + ".</b> Ventas = Base Neta del informe de ventas (sin IVA y sin propinas). " +
+    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras - Inv. Final. " +
+    "Costo Global = Mercanc&iacute;a Vendida / Ventas. Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. " +
+    "C&aacute;lculo actual: " + mvSrcNote() + ".";
+
   kpiGrid("k-res",[
-    {icon:"&#128176;",label:"Ventas Totales",value:fmt(v),sub:fmtCOP(v),bar:"#00b4d8,#48cae4"},
-    {icon:"&#128230;",label:"Inventario Inicial",value:fmt(ini),sub:(hay? "Conteo "+ims[0].toUpperCase():"Sin primer conteo"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128722;",label:"Compras Totales",value:fmt(c),sub:fmtCOP(c),bar:"#e67e22,#f39c12"},
-    {icon:"&#128200;",label:"Utilidad Bruta",value:fmt(v-mv),sub:p1(100-cg)+" de margen sobre ventas",color:"#06d6a0",bar:"#7209b7,#3a86ff"},
-    {icon:"&#128203;",label:"Inventario Final",value:fmt(fin),sub:(hay? "Conteo "+ims[ims.length-1].toUpperCase():"Sin segundo conteo"),bar:"#0096c7,#90e0ef"},
-    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(mv),sub:mvSrcShort(),bar:"#c0392b,#e74c3c"},
-    {icon:"&#128201;",label:"Costo Global",value:p1(cg),sub:(cg<36? "&#10003; En rango":"&#9888; Por encima de meta"),
-     color:colorCosto(cg),bar:(cg<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")}
+    {icon:"&#128176;",label:"Ventas Totales",value:fmt(c.ventas),sub:"Base neta sin IVA " + fmtCOP(c.ventas),bar:"#00b4d8,#48cae4"},
+    {icon:"&#128230;",label:"Inventario Inicial",value:fmt(c.invIni),sub:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
+    {icon:"&#128722;",label:"Compras Totales",value:fmt(c.compras),sub:fmtCOP(c.compras),bar:"#e67e22,#f39c12"},
+    {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
+    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:mvSrcShort(),bar:"#c0392b,#e74c3c"},
+    {icon:"&#128201;",label:"Costo Global",value:p1(c.costoPct),sub:(c.costoPct<=META? "&#10003; Bajo meta":"&#9888; Por encima de meta"),
+     color:colorCosto(c.costoPct),bar:(c.costoPct<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")},
+    {icon:"&#128200;",label:"Utilidad Bruta",value:fmt(c.utilidad),sub:p1(c.utilidadPct)+" sobre ventas",
+     color:(c.utilidad>=0? "#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"}
   ]);
 
-  var gcc=groupBy(FILTERED.ventas,"cc","base",12);
-  doughnut("c-res-cc",gcc.map(function(d){return d.k;}),gcc.map(function(d){return d.v;}),P);
+  var ccs = uniq(FILTERED.ventas,"cc").filter(function(k){ return calc(function(r){ return r.cc===k; }).ventas > 0; });
+  doughnut("c-res-cc",ccs,ccs.map(function(k){ return calc(function(r){ return r.cc===k; }).ventas; }),P);
 
-  var ms=uniq(FILTERED.ventas,"mes").sort(mesSort);
-  var agg=keyAgg(FILTERED.ventas,function(r){return r.mes;},"base");
-  var vals=ms.map(function(m){return agg[m]||0;});
-  barV("c-res-mes",ms.map(function(m){return m.toUpperCase();}),vals,G,false,true);
+  var ms = uniq(FILTERED.ventas,"mes").sort(mesSort);
+  var vals = ms.map(function(m){ return calc(function(r){ return r.mes===m; }).ventas; });
+  barV("c-res-mes",ms.map(function(m){ return m.toUpperCase(); }),vals,G,false,true);
 
-  var sumMes=0; vals.forEach(function(x){ sumMes+=x; });
-  if(!FILTERED.mv.length && Math.abs(sumMes-v)>1)
-    console.warn("KPI ventas ("+v+") != suma del gr\u00e1fico mensual ("+sumMes+")");
+  var sumMes = 0; vals.forEach(function(x){ sumMes += x; });
+  if(Math.abs(sumMes - c.ventas) > 1)
+    console.warn("KPI ventas (" + c.ventas + ") != suma del grafico mensual (" + sumMes + ")");
 
   hbar("c-res-catv",groupBy(FILTERED.ventas,"fam","base",5),P,260,true,false);
   hbar("c-res-catc",groupBy(FILTERED.compras,"fam","total",5),["#e67e22","#f39c12","#d35400","#e74c3c","#c0392b"],260,false,false);
@@ -1063,7 +1149,7 @@ function renderVentas(){
   var v=ventasTot(), uds=sumBy(FILTERED.ventas,"uds");
   var fams=groupBy(FILTERED.ventas,"fam","base",9999);
   kpiGrid("k-ven",[
-    {icon:"&#128176;",label:"Ventas Totales",value:fmt(v),sub:fmtCOP(v),bar:"#00b4d8,#48cae4"},
+    {icon:"&#128176;",label:"Ventas Totales",value:fmt(v),sub:"Base neta sin IVA "+fmtCOP(v),bar:"#00b4d8,#48cae4"},
     {icon:"&#128230;",label:"Total Unidades",value:fmtN(uds),sub:"unidades vendidas",bar:"#0077b6,#00b4d8"},
     {icon:"&#127968;",label:"Sedes Activas",value:String(uniq(FILTERED.ventas,"sede").length),sub:"con venta en el filtro",bar:"#7209b7,#3a86ff"},
     {icon:"&#127869;&#65039;",label:"Categor&iacute;as",value:String(fams.length),sub:"familias con venta",bar:"#27ae60,#06d6a0"}
@@ -1113,42 +1199,37 @@ function renderCompras(){
 
 /* ====================== 4. COSTO ====================== */
 function costRows(cc){
-  var out=[];
-  var sedes=uniq(FILTERED.ventas,"sede").sort();
-  var meses=uniq(FILTERED.ventas,"mes").sort(mesSort);
+  var out = [];
+  var sedes = uniq(FILTERED.ventas,"sede").sort();
+  var meses = uniq(FILTERED.ventas,"mes").sort(mesSort);
   sedes.forEach(function(s){
     meses.forEach(function(m){
-      var ven=0;
-      FILTERED.ventas.forEach(function(r){ if(r.sede===s && r.mes===m && r.ccBiz===cc) ven+=r.base; });
-      if(!(ven>0)) return;
-      var mv=mvMes(function(r){ return r.sede===s && r.cc===cc; }, m);
-      if(!(mv>0)) return;
-      out.push({k:s+" \u00b7 "+m.toUpperCase(), ventas:ven, pct:safeDiv(mv,ven)*100});
+      var k = calc(function(r){ return r.sede===s && r.mes===m && (r.ccBiz||r.cc)===cc; });
+      if(!(k.ventas>0) || !(k.mv>0)) return;
+      out.push({k:s+" \u00b7 "+m.toUpperCase(), ventas:k.ventas, pct:k.costoPct});
     });
   });
   out.sort(function(a,b){ return b.ventas-a.ventas; });
   return out;
 }
 function renderCosto(){
-  var nt=document.getElementById("cos-note");
-  if(nt) nt.innerHTML="<b>Costo Mercanc&iacute;a Vendida = (Inv. Inicial + Compras - Inv. Final) / Ventas.</b> "+
-    "La base de todos los indicadores y porcentajes es el valor de las <b>ventas</b>. "+
-    "C&aacute;lculo actual: "+mvSrcNote()+". Meta: "+META+"%.";
+  var c = C();
+  var nt = document.getElementById("cos-note");
+  if(nt) nt.innerHTML =
+    "<b>Periodo: " + periodoLbl() + ".</b> Costo Global = Mercanc&iacute;a Vendida / Ventas Base Neta. " +
+    "Mercanc&iacute;a Vendida = Inv. Inicial + Compras - Inv. Final. " +
+    "C&aacute;lculo actual: " + mvSrcNote() + ". Meta: " + META + "%.";
 
-  var v=ventasTot(), c=mvTot(), cg=safeDiv(c,v)*100;
-  var vCoc=sumBy(FILTERED.ventas.filter(function(r){return r.ccBiz==="Cocina";}),"base");
-  var vBar=sumBy(FILTERED.ventas.filter(function(r){return r.ccBiz==="Bar";}),"base");
-  var cCoc=mvBy(function(r){return r.cc==="Cocina";});
-  var cBar=mvBy(function(r){return r.cc==="Bar";});
-  var pCoc=safeDiv(cCoc,vCoc)*100, pBar=safeDiv(cBar,vBar)*100;
+  var v = c.ventas, cg = c.costoPct;
+  var kCoc = calc(ccPred("Cocina")), kBar = calc(ccPred("Bar"));
+  var pCoc = kCoc.costoPct, pBar = kBar.costoPct;
 
-  var sedes=uniq(FILTERED.ventas,"sede").sort();
-  var vS=keyAgg(FILTERED.ventas,function(r){return r.sede;},"base");
-  var cS={}; uniq(FILTERED.ventas,"sede").concat(uniq(FILTERED.compras,"sede")).forEach(function(s){ cS[s]=mvBy(function(r){return r.sede===s;}); });
-  var best=null;
+  var sedes = uniq(FILTERED.ventas,"sede").sort();
+  var kSede = {}; sedes.forEach(function(s){ kSede[s] = calc(function(r){ return r.sede===s; }); });
+  var best = null;
   sedes.forEach(function(s){
-    var p=safeDiv(cS[s]||0,vS[s]||0)*100;
-    if(p>0 && (!best || p<best.p)) best={s:s,p:p};
+    var p = kSede[s].costoPct;
+    if(p>0 && (!best || p<best.p)) best = {s:s,p:p};
   });
 
   kpiGrid("k-cos",[
@@ -1156,14 +1237,14 @@ function renderCosto(){
      color:colorCosto(pCoc),bar:(pCoc<=META?"#27ae60,#06d6a0":"#c0392b,#e74c3c")},
     {icon:"&#127864;",label:"Costo Bar",value:p1(pBar),sub:(pBar<=META? "&#10003; Bajo meta":"&#9888; Por encima"),
      color:colorCosto(pBar),bar:(pBar<=META?"#27ae60,#06d6a0":"#c0392b,#e74c3c")},
-    {icon:"&#128201;",label:"Costo Global",value:p1(cg),sub:fmt(c)+" sobre "+fmt(v),
+    {icon:"&#128201;",label:"Costo Global",value:p1(cg),sub:fmt(c.mv)+" sobre "+fmt(v),
      color:colorCosto(cg),bar:(cg<=META?"#27ae60,#06d6a0":"#c0392b,#e74c3c")},
     {icon:"&#127942;",label:"Mejor Costo por Sede",value:(best? p1(best.p):"-"),sub:(best? best.s:"sin datos"),
      color:(best? colorCosto(best.p):null),bar:"#0077b6,#00b4d8"}
   ]);
 
-  var sv=sedes.filter(function(s){ return safeDiv(cS[s]||0,vS[s]||0)>0; });
-  var svp=sv.map(function(s){ return safeDiv(cS[s]||0,vS[s]||0)*100; });
+  var sv=sedes.filter(function(s){ return kSede[s].costoPct>0; });
+  var svp=sv.map(function(s){ return kSede[s].costoPct; });
   barV("c-cos-sede",sv,svp,svp.map(colorCosto),true,true,0,[0,60]);
 
   var ccs=["Cocina","Bar"], ccp=[pCoc,pBar];
@@ -1172,9 +1253,8 @@ function renderCosto(){
   var ms=uniq(FILTERED.ventas,"mes").sort(mesSort);
   var series=sedes.map(function(s){
     return {name:s, data:ms.map(function(m){
-      var vv=sumBy(FILTERED.ventas.filter(function(r){return r.sede===s&&r.mes===m;}),"base");
-      var cc2=mvMes(function(r){return r.sede===s;},m);
-      return +(safeDiv(cc2,vv)*100).toFixed(1);
+      var k = calc(function(r){ return r.sede===s && r.mes===m; });
+      return +(k.costoPct).toFixed(1);
     })};
   });
   barGroup("c-cos-mes",ms.map(function(m){return m.toUpperCase();}),series,true,[20,50]);
@@ -1314,7 +1394,7 @@ function ratioBars(id,rows){
   el.innerHTML=h;
 }
 function renderPart(){
-  var v=sumBy(FILTERED.ventas,"base"), c=comprasTot();
+  var v=C().ventas, c=C().compras;
   var sedes=groupBy(FILTERED.ventas,"sede","base",99);
   var cats=groupBy(FILTERED.ventas,"fam","base",12);
   var catc=groupBy(FILTERED.compras,"fam","total",12);
@@ -1347,13 +1427,11 @@ function renderPart(){
 
 /* ====================== 7. INVENTARIOS ====================== */
 function renderInv(){
-  var ims=invMonths(), hay=ims.length>=2;
-  var ini=hay? invValor(ims[0]) : 0;
-  var fin=hay? invValor(ims[ims.length-1]) : 0;
+  var c = C();
   kpiGrid("k-inv",[
-    {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(ini),sub:(hay? "Conteo "+ims[0].toUpperCase():"Sin primer conteo"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128203;",label:"Inventario Final",value:fmtM(fin),sub:(hay? "Conteo "+ims[ims.length-1].toUpperCase():"Sin segundo conteo"),bar:"#0096c7,#90e0ef"},
-    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmtM(mvTot()),sub:p1(mvPct())+" sobre ventas",bar:"#7209b7,#3a86ff"},
+    {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(c.invIni),sub:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
+    {icon:"&#128203;",label:"Inventario Final",value:fmtM(c.invFin),sub:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
+    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmtM(c.mv),sub:p1(c.costoPct)+" sobre ventas",bar:"#7209b7,#3a86ff"},
     {icon:"&#127991;&#65039;",label:"Referencias",value:fmtN(uniq(FILTERED.inv,"art").length),sub:"art&iacute;culos inventariados",bar:"#27ae60,#06d6a0"}
   ]);
   var gcc=groupBy(FILTERED.inv,"cc","total",20);
@@ -1361,10 +1439,10 @@ function renderInv(){
   var gs=groupBy(FILTERED.inv,"sede","total",20);
   doughnut("c-inv-sede",gs.map(function(d){return d.k;}),gs.map(function(d){return d.v;}),P);
   var it=document.getElementById("inv-total");
-  if(it) it.innerHTML='<div class="big">'+fmtM(fin)+'</div>'+
-    '<div style="color:#adb5bd;font-size:.78rem">'+fmtCOP(fin)+'</div>'+
+  if(it) it.innerHTML='<div class="big">'+fmtM(c.invFin)+'</div>'+
+    '<div style="color:#adb5bd;font-size:.78rem">'+fmtCOP(c.invFin)+'</div>'+
     '<div style="color:#6c8ebf;font-size:.68rem">'+fmtN(uniq(FILTERED.inv,"art").length)+' referencias &middot; '+
-    (ims.length? ims.join(", ").toUpperCase():"-")+'</div>';
+    (c.conteos? (c.conteos+" conteo(s) "+[c.fIni,c.fFin].filter(Boolean).join(" / ")) : "sin conteos")+'</div>';
   pivotInv("t-inv-pivot");
   barV("c-inv-sede2",gs.map(function(d){return d.k;}),gs.map(function(d){return d.v;}),["#06d6a0","#00b4d8","#7209b7","#e67e22"],false,true);
   var gf=groupBy(FILTERED.inv,"fam","total",99);
@@ -1418,66 +1496,48 @@ function mvRows(){
   [FILTERED.ventas,FILTERED.compras,FILTERED.inv].forEach(function(arr){
     arr.forEach(function(r){ if(r.sede) us[r.sede]=1; });
   });
-  var ccs=["Cocina","Bar"];
-  var ims=invMonths(), hay=ims.length>=2, m0=ims[0], m1=ims[ims.length-1];
-  var out=[];
+  var ccs=["Cocina","Bar"], out=[];
   Object.keys(us).sort().forEach(function(s){
     ccs.forEach(function(cc){
-      var ini=0, fin=0;
-      if(hay) FILTERED.inv.forEach(function(r){
-        if(r.sede!==s || r.cc!==cc) return;
-        if(r.mes===m0) ini+=r.total; else if(r.mes===m1) fin+=r.total;
-      });
-      var com=0;
-      FILTERED.compras.forEach(function(r){ if(r.sede===s && r.cc===cc) com+=r.total; });
-      var ven=0;
-      FILTERED.ventas.forEach(function(r){ if(r.sede===s && r.ccBiz===cc) ven+=r.base; });
-      if(!(ven>0 || com>0 || ini>0 || fin>0)) return;
-      var mv=ini+com-fin;
-      out.push({sede:s,cc:cc,ini:ini,com:com,fin:fin,mv:mv,ventas:ven,pct:safeDiv(mv,ven)*100});
+      var k=calc(function(r){ return r.sede===s && (r.ccBiz||r.cc)===cc; });
+      if(!(k.ventas>0 || k.compras>0 || k.invIni>0 || k.invFin>0)) return;
+      out.push({sede:s, cc:cc, ini:k.invIni, com:k.compras, fin:k.invFin,
+                mv:k.mv, ventas:k.ventas, pct:k.costoPct, util:k.utilidad, completo:k.completo});
     });
   });
   return out;
 }
 function renderMV(){
-  var ims=invMonths(), hay=ims.length>=2;
-  var v=ventasTot(), com=comprasTot();
-  var ini=hay? invValor(ims[0]) : 0;
-  var fin=hay? invValor(ims[ims.length-1]) : 0;
-  var mv=mvTot(), pct=safeDiv(mv,v)*100;
-
+  var c=C();
   var nt=document.getElementById("mv-note");
-  if(nt) nt.innerHTML="<b>Mercanc&iacute;a Vendida = Inventario Inicial + Compras - Inventario Final.</b> "+
-    "<b>Costo Mercanc&iacute;a Vendida % = Mercanc&iacute;a Vendida / Ventas.</b> "+
-    "Todos los indicadores de la app usan las <b>ventas</b> como valor base. C&aacute;lculo actual: "+mvSrcNote()+".";
+  if(nt) nt.innerHTML=
+    "<b>Periodo: "+periodoLbl()+".</b> Mercanc&iacute;a Vendida = Inventario Inicial + Compras - Inventario Final. " +
+    "Costo Mercanc&iacute;a Vendida % = Mercanc&iacute;a Vendida / Ventas Base Neta. " +
+    "Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. C&aacute;lculo actual: "+mvSrcNote()+".";
 
   kpiGrid("k-mv",[
-    {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(ini),sub:(hay? "Conteo "+ims[0].toUpperCase():"Sin primer conteo"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128722;",label:"Compras",value:fmtM(com),sub:fmtCOP(com),bar:"#e67e22,#f39c12"},
-    {icon:"&#128203;",label:"Inventario Final",value:fmtM(fin),sub:(hay? "Conteo "+ims[ims.length-1].toUpperCase():"Sin segundo conteo"),bar:"#0096c7,#90e0ef"},
-    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmtM(mv),sub:mvSrcShort(),bar:"#c0392b,#e74c3c"},
-    {icon:"&#128176;",label:"Ventas (base)",value:fmtM(v),sub:fmtCOP(v),bar:"#00b4d8,#48cae4"},
-    {icon:"&#128201;",label:"Costo Mercanc&iacute;a Vendida",value:p1(pct),sub:(pct<=META? "&#10003; Bajo meta":"&#9888; Por encima de meta"),
-     color:colorCosto(pct),bar:(pct<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")}
+    {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(c.invIni),sub:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
+    {icon:"&#128722;",label:"Compras",value:fmtM(c.compras),sub:fmtCOP(c.compras),bar:"#e67e22,#f39c12"},
+    {icon:"&#128203;",label:"Inventario Final",value:fmtM(c.invFin),sub:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
+    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmtM(c.mv),sub:mvSrcShort(),bar:"#c0392b,#e74c3c"},
+    {icon:"&#128176;",label:"Ventas Base Neta",value:fmtM(c.ventas),sub:fmtCOP(c.ventas),bar:"#00b4d8,#48cae4"},
+    {icon:"&#128201;",label:"Costo Mercanc&iacute;a Vendida",value:p1(c.costoPct),sub:(c.costoPct<=META? "&#10003; Bajo meta":"&#9888; Por encima de meta"),
+     color:colorCosto(c.costoPct),bar:(c.costoPct<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")}
   ]);
 
   MV_ROWS=mvRows();
   var sedes=uniq(MV_ROWS,"sede");
-  barV("c-mv-sede",sedes,sedes.map(function(s){ return mvBy(function(r){return r.sede===s;}); }),G,false,true);
+  var kS={}; sedes.forEach(function(s){ kS[s]=calc(function(r){ return r.sede===s; }); });
+  barV("c-mv-sede",sedes,sedes.map(function(s){ return kS[s].mv; }),G,false,true);
 
   var ccs=["Cocina","Bar"];
-  barV("c-mv-cc",ccs,ccs.map(function(c){ return mvBy(function(r){return r.cc===c;}); }),P,false,true);
+  var kC={}; ccs.forEach(function(x){ kC[x]=calc(ccPred(x)); });
+  barV("c-mv-cc",ccs,ccs.map(function(x){ return kC[x].mv; }),P,false,true);
 
-  var pS=sedes.map(function(s){
-    var vv=0; FILTERED.ventas.forEach(function(r){ if(r.sede===s) vv+=r.base; });
-    return safeDiv(mvBy(function(r){return r.sede===s;}),vv)*100;
-  });
+  var pS=sedes.map(function(s){ return kS[s].costoPct; });
   barV("c-mv-pct-sede",sedes,pS,pS.map(colorCosto),true,true,0,[0,60]);
 
-  var pC=ccs.map(function(c){
-    var vv=0; FILTERED.ventas.forEach(function(r){ if(r.ccBiz===c) vv+=r.base; });
-    return safeDiv(mvBy(function(r){return r.cc===c;}),vv)*100;
-  });
+  var pC=ccs.map(function(x){ return kC[x].costoPct; });
   barV("c-mv-pct-cc",ccs,pC,pC.map(colorCosto),true,true,0,[0,60]);
 
   var gf=groupBy(FILTERED.compras,"fam","total",20);
@@ -1487,23 +1547,27 @@ function renderMV(){
 }
 function mvTable(){
   var el=document.getElementById("t-mv"); if(!el) return;
-  var c=document.getElementById("mv-count");
-  if(c) c.textContent=MV_ROWS.length+" combinaciones";
+  var cnt=document.getElementById("mv-count");
+  if(cnt) cnt.textContent=MV_ROWS.length+" combinaciones";
   if(!MV_ROWS.length){ el.innerHTML=emptyHTML("Sin datos para el juego de inventarios"); return; }
   var h='<table><thead><tr><th>Sede</th><th>Centro</th><th class="n">Inv. Inicial</th><th class="n">Compras</th>'+
-        '<th class="n">Inv. Final</th><th class="n">Mercanc&iacute;a Vendida</th><th class="n">Ventas</th><th class="n">Costo M.V.</th></tr></thead><tbody>';
-  var t={ini:0,com:0,fin:0,mv:0,ventas:0};
+        '<th class="n">Inv. Final</th><th class="n">Mercanc&iacute;a Vendida</th><th class="n">Ventas Base Neta</th>'+
+        '<th class="n">Utilidad Bruta</th><th class="n">Costo M.V.</th></tr></thead><tbody>';
+  var t={ini:0,com:0,fin:0,mv:0,ventas:0,util:0};
   MV_ROWS.forEach(function(d){
-    t.ini+=d.ini; t.com+=d.com; t.fin+=d.fin; t.mv+=d.mv; t.ventas+=d.ventas;
+    t.ini+=d.ini; t.com+=d.com; t.fin+=d.fin; t.mv+=d.mv; t.ventas+=d.ventas; t.util+=d.util;
     h+='<tr><td class="nm">'+esc(d.sede)+'</td><td>'+tagCC(d.cc)+'</td>'+
        '<td class="n">'+fmtM(d.ini)+'</td><td class="n">'+fmtM(d.com)+'</td>'+
        '<td class="n">'+fmtM(d.fin)+'</td><td class="n"><b>'+fmtM(d.mv)+'</b></td>'+
-       '<td class="n">'+fmtM(d.ventas)+'</td><td class="n">'+tagCosto(d.pct)+'</td></tr>';
+       '<td class="n">'+fmtM(d.ventas)+'</td>'+
+       '<td class="n" style="color:'+(d.util>=0?"#06d6a0":"#e74c3c")+'">'+fmtM(d.util)+'</td>'+
+       '<td class="n">'+tagCosto(d.pct)+'</td></tr>';
   });
   h+='<tr><td class="nm"><b>TOTAL</b></td><td></td>'+
      '<td class="n"><b>'+fmtM(t.ini)+'</b></td><td class="n"><b>'+fmtM(t.com)+'</b></td>'+
      '<td class="n"><b>'+fmtM(t.fin)+'</b></td><td class="n"><b>'+fmtM(t.mv)+'</b></td>'+
-     '<td class="n"><b>'+fmtM(t.ventas)+'</b></td><td class="n">'+tagCosto(safeDiv(t.mv,t.ventas)*100)+'</td></tr>';
+     '<td class="n"><b>'+fmtM(t.ventas)+'</b></td><td class="n"><b>'+fmtM(t.util)+'</b></td>'+
+     '<td class="n">'+tagCosto(safeDiv(t.mv,t.ventas)*100)+'</td></tr>';
   el.innerHTML=h+'</tbody></table>';
 }
 function bindMV(){
@@ -1512,14 +1576,35 @@ function bindMV(){
     if(!MV_ROWS.length){ alert("No hay datos para exportar."); return; }
     var data=MV_ROWS.map(function(r){
       return {Sede:r.sede, "Centro de Costos":r.cc, "Inv Inicial":r.ini, Compras:r.com,
-              "Inv Final":r.fin, "Mercancia vendida":r.mv, Ventas:r.ventas,
-              "Costo Mercancia Vendida":r.pct/100};
+              "Inv Final":r.fin, "Mercancia vendida":r.mv, "Ventas Base Neta":r.ventas,
+              "Utilidad Bruta":r.util, "Costo Mercancia Vendida":r.pct/100};
     });
     var ws=XLSX.utils.json_to_sheet(data);
     var wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,"Mercancia Vendida");
     XLSX.writeFile(wb,"mercancia-vendida-casa-de-nadie.xlsx");
   };
+}
+
+/* ====================== 9. NUEVO MODULO (estructura) ====================== */
+/* Layout y navegacion listos. La logica se desarrolla despues; consume C() / calc()
+   para no duplicar formulas cuando se implemente. */
+function renderNuevo(){
+  var nt=document.getElementById("nuevo-note");
+  if(nt) nt.innerHTML="<b>M&oacute;dulo en construcci&oacute;n.</b> La estructura y la navegaci&oacute;n ya est&aacute;n listas; "+
+    "el contenido se define m&aacute;s adelante. Periodo activo: "+periodoLbl()+".";
+
+  var el=document.getElementById("k-nuevo");
+  if(el) el.innerHTML="";
+
+  ["nuevo-b1","nuevo-b2"].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e) e.innerHTML='<div style="color:#6c8ebf;font-size:.8rem;text-align:center">'+
+      '<div style="font-size:2rem;opacity:.5">&#128736;&#65039;</div>Espacio reservado</div>';
+  });
+
+  var t=document.getElementById("t-nuevo");
+  if(t) t.innerHTML=emptyHTML("Espacio reservado para el nuevo m\u00f3dulo");
 }
 
 /* ====================== INICIO ====================== */
