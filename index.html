@@ -445,6 +445,16 @@ function col(row,kws){
   }
   return "";
 }
+/* busca una columna por palabras clave ignorando las que contengan alguna palabra vetada */
+function colNx(row,kws,veto){
+  for(var k in row){
+    var lk=k.toLowerCase(), mal=false;
+    if(veto){ for(var v=0;v<veto.length;v++){ if(lk.indexOf(veto[v])>=0) mal=true; } }
+    if(mal) continue;
+    for(var i=0;i<kws.length;i++){ if(lk.indexOf(kws[i])>=0) return num(row[k]); }
+  }
+  return 0;
+}
 function colHas(row,kws){
   for(var k in row){
     var lk=k.toLowerCase();
@@ -686,11 +696,11 @@ function parseExcel(wb){
   if(shR){
     var rr=J(shR);
     /* tolerancia: si la fila 1 no trae encabezados utiles, se reintenta con la fila 2 */
-    if(!rr.length || (!colHas(rr[0],["coste","costo"]) && !colHas(rr[0],["margen"]))) rr=J(shR,{range:1});
+    if(!rr.length || (!colHas(rr[0],["coste"]) && !colHas(rr[0],["margen"]))) rr=J(shR,{range:1});
     rr.forEach(function(r){
       var art=up(col(r,AKW)); if(!art) return;
       var precio=colN(r,["precio"]), base=colN(r,["base"]), imp=colN(r,["impuesto"]);
-      var costo=colN(r,["coste","costo"]), m=colN(r,["margen"]);
+      var costo=colNx(r,["coste","costo"],["centr"]), m=colN(r,["margen"]);
       if(!precio && !costo) return;
       if(!base) base=precio-imp;
       RAW.rent.push({
@@ -863,7 +873,7 @@ function setH(id,h){
   var w=el.parentNode; if(w && w.className.indexOf("cw")>=0) w.style.height=h+"px";
 }
 
-function hbar(id,data,colors,h,uds,pct){
+function hbar(id,data,colors,h,uds,pct,esUds){
   var el=document.getElementById(id); if(!el) return;
   setH(id,h);
   if(!data || !data.length){ emptyCanvas(id); return; }
@@ -877,11 +887,11 @@ function hbar(id,data,colors,h,uds,pct){
       layout:{padding:{right:46}},
       plugins:{legend:{display:false},
         tooltip:Object.assign({},TIP,{callbacks:{label:function(c){
-          var d=data[c.dataIndex], s=pct? p1(d.v) : fmtCOP(d.v);
+          var d=data[c.dataIndex], s=pct? p1(d.v) : (esUds? fmtN(d.v)+" uds" : fmtCOP(d.v));
           if(uds && d.uds) s += "  |  "+fmtN(d.uds)+" uds";
           return s; }}}),
         datalabels:{display:true, anchor:"end", align:"right", color:"#adb5bd", font:{size:9},
-          formatter:function(v){ return pct? p1(v) : fmt(v); }}},
+          formatter:function(v){ return pct? p1(v) : (esUds? fmtN(v) : fmt(v)); }}},
       scales:{x:{beginAtZero:true,grid:{color:"rgba(0,180,216,.06)"},ticks:{font:{size:9},
                  callback:function(v){ return pct? v+"%" : fmt(v); }}},
               y:{grid:{display:false},ticks:{font:{size:9.5},autoSkip:false}}}}
@@ -1772,7 +1782,7 @@ function renderAC(){
        topM.map(function(o){ return o.margen>=(100-META)? "#06d6a0":"#3a86ff"; }),340,false,true);
 
   var topU=AC_ITEMS.slice().sort(function(a,b){ return b.uds-a.uds; }).slice(0,10);
-  hbar("c-ac-uds",topU.map(function(o){ return {k:o.art,v:o.uds}; }),G,340,false,false);
+  hbar("c-ac-uds",topU.map(function(o){ return {k:o.art,v:o.uds}; }),G,340,false,false,true);
 
   var topT=AC_ITEMS.slice().sort(function(a,b){ return b.utilidad-a.utilidad; }).slice(0,10);
   hbar("c-ac-uti",topT.map(function(o){ return {k:o.art,v:o.utilidad,uds:o.uds}; }),
