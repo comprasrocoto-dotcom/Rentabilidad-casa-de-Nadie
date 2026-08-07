@@ -819,6 +819,7 @@ function showTab(id,btn){
   for(var j=0;j<bs.length;j++) bs[j].classList.remove("active");
   if(btn) btn.classList.add("active");
   window.scrollTo(0,0);
+  if(typeof SEC_DIRTY !== "undefined" && SEC_DIRTY[id]) renderSec(id);
   resizeTabCharts(t);
 }
 /* los graficos dibujados mientras su pestana estaba oculta quedan con un alto de 0:
@@ -1202,11 +1203,29 @@ function ccPred(k){ return function(r){ return (r.ccBiz || r.cc) === k; }; }
 
 
 /* ====================== RENDER MAESTRO ====================== */
+/* Cada pestana se dibuja sola. Los nombres van como texto porque algunos render
+   viven en un bloque <script> posterior a este. */
+var SEC_RENDER = {
+  "sec-resumen":"renderResumen", "sec-ventas":"renderVentas", "sec-compras":"renderCompras",
+  "sec-costo":"renderCosto",     "sec-rent":"renderRent",     "sec-part":"renderPart",
+  "sec-inv":"renderInv",         "sec-mv":"renderMV",         "sec-ac":"renderAC"
+};
+var SEC_DIRTY = {};
+function activeSecId(){
+  var s = document.querySelector("main section.active");
+  return (s && SEC_RENDER[s.id]) ? s.id : "sec-resumen";
+}
+function renderSec(id){
+  var f = window[SEC_RENDER[id]];
+  if(typeof f !== "function") return;
+  try{ f(); SEC_DIRTY[id] = false; }
+  catch(e){ console.warn("Render de " + id + " fallo: " + e.message); }
+}
+/* Solo se dibuja la pestana visible: las demas quedan marcadas y se dibujan al abrirlas.
+   Asi un cambio de filtro no recalcula los nueve modulos de golpe. */
 function renderAll(){
-  var fns=[renderResumen,renderVentas,renderCompras,renderCosto,renderRent,renderPart,renderInv,renderMV,renderAC];
-  for(var i=0;i<fns.length;i++){
-    try{ fns[i](); }catch(e){ console.warn("Render "+i+" falló: "+e.message); }
-  }
+  for(var k in SEC_RENDER) SEC_DIRTY[k] = true;
+  renderSec(activeSecId());
 }
 
 /* ====================== 1. RESUMEN ====================== */
@@ -1732,9 +1751,9 @@ function bindMV(){
   };
 }
 
-/* ====================== 9. NUEVO MODULO (estructura) ====================== */
-/* Layout y navegacion listos. La logica se desarrolla despues; consume C() / calc()
-   para no duplicar formulas cuando se implemente. */
+/* ====================== 9. ANALISIS COMERCIAL ====================== */
+/* Tablero ejecutivo. Consume C() / calc() y la hoja RENTABILIDAD: no duplica formulas.
+   El costo por producto se calibra para cuadrar con la Mercancia Vendida del periodo. */
 function renderAC(){
   AC_ITEMS=buildAC();
   var c=C(), T=AC_TOT||{uds:0,base:0,util:0,cmProm:0,n:0};
