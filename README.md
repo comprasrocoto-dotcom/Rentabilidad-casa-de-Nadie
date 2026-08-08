@@ -58,7 +58,10 @@ Costo por producto, en este orden de prioridad:
    cuadre exactamente con la Mercancia Vendida del periodo.
 
 El tercer paso es el que garantiza que el modulo no invente cifras: por construccion
-suma lo mismo que el juego de inventarios.
+suma lo mismo que el juego de inventarios. Si las fichas y los precios de compra ya
+sumaran mas que la Mercancia Vendida del periodo (no queda bolsa residual que calibrar),
+los costos del centro se escalan y el tablero avisa de forma explicita en la nota
+superior. En los dos casos la suma de los costos por producto es igual al costo total.
 
 ## Notas de calculo
 
@@ -90,6 +93,25 @@ suma lo mismo que el juego de inventarios.
 - Margen de la hoja RENTABILIDAD = Coste / Precio, es decir food cost, no utilidad.
 - Los graficos de una pestana oculta se redimensionan al mostrarla, para que las barras
   y sus etiquetas queden alineadas.
+
+## Rendimiento
+
+Con el volumen real (unas 14.000 filas de ventas, 5.000 de compras y 2.500 de fichas)
+las medidas en el navegador son:
+
+- Cambiar de mes, sede o centro de costos: alrededor de 0,15 s.
+- Abrir una pestana por primera vez despues de un cambio de filtro: 0,3 a 0,6 s.
+- Volver a una pestana ya dibujada: instantaneo.
+
+Dos decisiones explican esos numeros:
+
+1. Solo se dibuja la pestana visible. Un cambio de filtro marca las otras ocho y cada una
+   se dibuja cuando se abre, no antes. Antes se redibujaban las nueve de golpe (unos 2 s).
+2. Las tablas largas (la hoja RENTABILIDAD completa y la Ingenieria del Menu producto por
+   producto) se pintan en tramos de 250 filas, con un boton para ir mostrando mas.
+
+Lo que queda es el tiempo de la libreria XLSX al leer el archivo, que es proporcional al
+tamano del Excel y ocurre una sola vez por sincronizacion.
 - Meta de food cost: 35%.
 
 ## Despliegue
