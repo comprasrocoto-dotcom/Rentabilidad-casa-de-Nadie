@@ -22,46 +22,62 @@ El Sheet debe estar compartido como "Cualquiera con el enlace: Lector".
 | COMPRAS | compras netas por proveedor, familia, articulo, mes y centro de costos |
 | INVENTARIOS | valor inventariado por conteo. Cada fecha de documento es un conteo: el primero del periodo es el Inventario Inicial y el segundo el Inventario Final |
 
-| RENTABILIDAD | ficha tecnica por articulo (Precio, Base, Coste, Margen). Es la unica fuente
-de la pestana Rentabilidad y la primera opcion de costo unitario en Analisis Comercial |
+| RENTABILIDAD | ficha tecnica por articulo (Precio, Impuesto, Base, Coste, Margen). Es la UNICA fuente del costo de cada plato |
 
 El encabezado de cada hoja se detecta solo (no tiene que estar en la fila 1) y las
 columnas se buscan por palabras clave, asi que renombrarlas no rompe el tablero.
 
 ## Pestanas
 
-Resumen, Ventas, Compras, Costo, Rentabilidad, Participacion, Inventarios,
-Mercancia Vendida (juego de inventarios con exportacion a Excel) y Analisis Comercial.
+Resumen, Ventas, Compras, Costo, Rentabilidad, Participacion, Inventarios y
+Mercancia Vendida (juego de inventarios con exportacion a Excel).
 
-### Analisis Comercial
+Hay una sola marca y una sola sede, asi que el tablero no compara sedes: no existe
+filtro de sede ni graficos por sede. El analisis se abre por Centro de Costo
+(Bar / Cocina) con un filtro de Todos / Bar / Cocina.
 
-Tablero ejecutivo para decidir que impulsar en la carta. Consolida ventas, costos y
-rentabilidad del mismo periodo filtrado:
+Un boton en el encabezado alterna entre modo claro y modo oscuro. La preferencia se
+guarda en el navegador y se conserva al navegar entre pestanas.
 
-- Nueve indicadores globales: venta total, base neta, costo total, utilidad bruta,
-  margen bruto, ticket promedio, productos vendidos, numero de facturas y costo
-  promedio por plato.
+### Rentabilidad
+
+Es el informe de desempeno del menu. Consolida ventas, costos y rentabilidad del
+mismo periodo filtrado:
+
+- Diez indicadores globales: venta base, costo de fichas, utilidad bruta, margen bruto,
+  costo sobre venta, productos por encima del 35%, unidades vendidas, numero de facturas,
+  ticket promedio y costo promedio por plato. Cada tarjeta muestra el valor resumido en
+  millones y, debajo, el valor exacto en pesos.
 - Rankings: mejor margen, mas vendidos por unidades, mayor utilidad total y bajo margen.
 - Productos que los meseros deben ofrecer primero: puntaje automatico que pesa
   margen 40%, rotacion 30% y utilidad 30%.
-- Ingenieria del Menu (Kasavana-Smith): Estrella, Caballo de batalla, Rompecabezas y Perro.
-  El umbral de popularidad es el 70% de las unidades promedio; la rentabilidad se mide
-  con el margen de contribucion unitario frente al promedio ponderado.
-- Graficos: top 10 mas rentables, top 10 mas vendidos, top 10 mayor utilidad,
-  ventas por familia, costos por familia, participacion por categoria y tendencia mensual.
+- Ingenieria del Menu: tabla producto por producto con Centro de Costo, Producto,
+  Familia, Unidades vendidas, Participacion de esas unidades, Venta Base, Costo,
+  Costo %, Utilidad y Margen. Sin clasificaciones tipo Estrella / Caballo de batalla /
+  Rompecabezas / Perro: se eliminaron por pedido del negocio.
+- Graficos: top 10 mayor utilidad, top 10 mas vendidos, top 10 mejor margen,
+  productos con costo por encima del 35%, ventas por familia, costos por familia,
+  participacion por centro de costo y tendencia mensual de venta, costo y margen.
+- La hoja RENTABILIDAD se muestra ademas tal cual viene de Drive, para poder auditar
+  de donde sale cada coste.
 
-Costo por producto, en este orden de prioridad:
+De donde sale el costo de cada plato:
 
-1. Ficha tecnica: columna Coste de la hoja RENTABILIDAD.
-2. Precio de compra: costo unitario promedio del insumo en COMPRAS.
-3. Tasa de su centro de costos, calibrada para que la suma de los costos por producto
-   cuadre exactamente con la Mercancia Vendida del periodo.
+Del campo Coste de la hoja RENTABILIDAD de Google Drive, y de ningun otro lado.
+Costo del producto = coste de la ficha x unidades vendidas.
 
-El tercer paso es el que garantiza que el modulo no invente cifras: por construccion
-suma lo mismo que el juego de inventarios. Si las fichas y los precios de compra ya
-sumaran mas que la Mercancia Vendida del periodo (no queda bolsa residual que calibrar),
-los costos del centro se escalan y el tablero avisa de forma explicita en la nota
-superior. En los dos casos la suma de los costos por producto es igual al costo total.
+No se deduce desde las ventas a proposito: un plato es un producto compuesto y una
+venta solo dice cuantas unidades salieron, no que insumos ni que cantidades lleva la
+receta. Si un producto vendido no tiene ficha en la hoja RENTABILIDAD aparece en la
+tabla con sus unidades y su venta base, pero se deja fuera del costo, la utilidad, el
+margen y los rankings, y la nota superior dice cuantos son.
+
+Alerta de costo:
+
+La meta de food cost es 35% como maximo. Todo producto cuyo Costo % supere ese limite
+se marca en rojo con un aviso en la tabla, tiene su propio grafico y su propia tarjeta
+de indicador, y se puede aislar con el boton "Solo costo > 35%". Sirve para detectar
+que platos necesitan revision de precio o de receta.
 
 ## Notas de calculo
 
@@ -71,7 +87,9 @@ superior. En los dos casos la suma de los costos por producto es igual al costo 
   por su cuenta; todos leen el mismo motor, por eso los numeros cuadran entre pestanas.
 - Ventas = suma de la columna Base de VENTAS (Base Neta: sin IVA, sin propinas).
   Se incluyen notas credito y descuentos (valores negativos) para cuadrar con el reporte.
-- Todos los indicadores respetan a la vez el filtro de Mes, Sede y Centro de costos.
+- Todos los indicadores respetan a la vez el filtro de Mes y Centro de Costo.
+  El filtro de centro ofrece Todos / Bar / Cocina; las ventas de Eventos se reparten
+  entre Bar y Cocina segun el articulo, para que nada quede fuera del analisis.
 - Mercancia Vendida = Inventario Inicial + Compras - Inventario Final.
   Excel equivalente: =+[@[Inv Inicial]]+[@Compras]-([@[Inv Final]])
 - Costo Mercancia Vendida (%) = Mercancia Vendida / Ventas.
@@ -86,11 +104,14 @@ superior. En los dos casos la suma de los costos por producto es igual al costo 
   y se muestra aparte en la pestana Compras para que el descarte sea auditable.
 - Todas las tarjetas del Resumen muestran el valor resumido en millones y, debajo,
   el valor exacto en pesos.
-- La pestana Rentabilidad no recalcula nada: lee la hoja RENTABILIDAD tal como esta.
-  Filtra por Sede y Centro de Costos, descarta las tarifas de Rappi, personal y empleados,
-  y aparta como atipicos los registros con Coste fuera del rango 0-100% del precio
-  (se listan en la tabla, pero no entran en promedios ni graficos).
-- Margen de la hoja RENTABILIDAD = Coste / Precio, es decir food cost, no utilidad.
+- La pestana Rentabilidad toma el costo de cada plato de la hoja RENTABILIDAD tal como
+  esta, y las unidades y la Venta Base de la hoja VENTAS. Descarta las tarifas de Rappi,
+  personal y empleados, y las familias que no son producto real (adiciones, cortesias,
+  descuentos, propinas, etc.).
+- Utilidad = Venta Base - Costo. Margen = Utilidad / Venta Base. Costo % = Costo / Venta Base.
+  Todo se calcula sobre la Venta Base, nunca sobre ventas con impuestos.
+- Mercancia Vendida por Sede y Costo de Mercancia Vendida por Sede ya no existen.
+  Quedan Mercancia Vendida por Centro de Costo y Costo de Mercancia Global.
 - Los graficos de una pestana oculta se redimensionan al mostrarla, para que las barras
   y sus etiquetas queden alineadas.
 
@@ -112,7 +133,8 @@ Dos decisiones explican esos numeros:
 
 Lo que queda es el tiempo de la libreria XLSX al leer el archivo, que es proporcional al
 tamano del Excel y ocurre una sola vez por sincronizacion.
-- Meta de food cost: 35%.
+- Meta de food cost: 35% como maximo.
+- El tema claro/oscuro solo cambia la apariencia: no altera ningun calculo.
 
 ## Despliegue
 
