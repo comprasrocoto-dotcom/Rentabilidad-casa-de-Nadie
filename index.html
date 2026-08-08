@@ -926,7 +926,7 @@ function barV(id,labels,values,colors,pct,showLabels,rot,ySug){
   if(ySug){ sc.y.suggestedMin=ySug[0]; sc.y.suggestedMax=ySug[1]; }
   mkChart(id,{
     type:"bar",
-    data:{labels:labels,datasets:[{data:values,backgroundColor:colors||G,borderRadius:5,barPercentage:.72}]},
+    data:{labels:labels,datasets:[{data:values,backgroundColor:colors||G,borderRadius:5,barPercentage:.72,maxBarThickness:90}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},
         tooltip:Object.assign({},TIP,{callbacks:{label:function(c){
