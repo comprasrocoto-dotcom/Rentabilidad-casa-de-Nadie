@@ -1796,7 +1796,7 @@ function renderAC(){
     "ventas = base neta ("+fmtCOP(c.ventas)+") y costo total = Mercanc&iacute;a Vendida ("+fmtCOP(c.mv)+"). "+
     "El costo de cada producto se asigna en este orden: <b>ficha t&eacute;cnica</b> de la hoja RENTABILIDAD ("+srcN.Ficha+" productos), "+
     "<b>precio de compra</b> del insumo ("+srcN.Compra+" productos) y, para el resto, la <b>tasa de costo de su centro de costos</b>, "+
-    "calibrada para que la suma de los costos por producto cuadre exactamente con la Mercanc&iacute;a Vendida del periodo.";
+    "calibrada para que la suma de los costos por producto cuadre exactamente con la Mercanc&iacute;a Vendida del periodo."+cuadreNota();
 
   kpiGrid("k-ac",[
     {icon:"&#129534;",label:"Venta Total",value:fmt(neto),sub:fmtCOP(neto),
@@ -1893,7 +1893,7 @@ function acTrend(){
 }
 
 /* ====================== 9. ANALISIS COMERCIAL ====================== */
-var AC_ITEMS=[], AC_FILTER="all", AC_TOT=null;
+var AC_ITEMS=[], AC_FILTER="all", AC_TOT=null, AC_CUADRE=[];
 var ME_LBL={Estrella:"&#11088; Estrella",Caballo:"&#128014; Caballo de batalla",Puzzle:"&#129513; Rompecabezas",Perro:"&#128054; Perro"};
 var ME_CLS={Estrella:"me-st",Caballo:"me-ph",Puzzle:"me-pz",Perro:"me-dg"};
 
@@ -1915,7 +1915,17 @@ function fichaCost(){
    Prioridad del costo unitario: 1) ficha tecnica  2) precio de compra del insumo
    3) tasa residual del centro de costos, de modo que la suma de costos por producto
    cuadre exactamente con la Mercancia Vendida del periodo. */
+/* Aviso honesto cuando las fichas ya sumaban mas que la Mercancia Vendida y hubo
+   que escalar los costos del centro para no descuadrar. */
+function cuadreNota(){
+  if(!AC_CUADRE.length) return "";
+  var t=AC_CUADRE.map(function(x){ return x.cc+" &times;"+x.f.toFixed(2); }).join(", ");
+  return " <b>Aviso:</b> en este periodo las fichas y los precios de compra ya sumaban m&aacute;s "+
+    "que la Mercanc&iacute;a Vendida, as&iacute; que los costos por producto se escalaron para no "+
+    "descuadrar con el juego de inventarios ("+t+").";
+}
 function buildAC(){
+  AC_CUADRE=[];
   var m={}, fichas=fichaCost();
   FILTERED.ventas.forEach(function(r){
     if(r.esPropina) return;
@@ -1944,6 +1954,15 @@ function buildAC(){
     if(!(rate>0 && rate<1)) rate=safeDiv(cCC.mv,cCC.ventas);
     if(!(rate>0)) rate=safeDiv(C().mv,C().ventas);
     g.forEach(function(o){ if(!o.src){ o.costo=o.base*rate; o.src="Tasa CC"; } });
+    /* Si las fichas y los precios de compra ya suman mas que la Mercancia Vendida del
+       centro no queda bolsa residual que calibrar: se escalan todos los costos del centro
+       para que el modulo siga cuadrando con el juego de inventarios (SSOT). */
+    var tc=0; g.forEach(function(o){ tc+=o.costo; });
+    if(cCC.mv>0 && tc>0 && Math.abs(tc-cCC.mv)>1){
+      var fac=cCC.mv/tc;
+      g.forEach(function(o){ o.costo=o.costo*fac; o.ajus=true; });
+      AC_CUADRE.push({cc:cc,f:fac});
+    }
   }
   arr.forEach(function(o){
     o.utilidad=o.base-o.costo;
