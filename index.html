@@ -48,6 +48,8 @@ padding:6px 9px;font-size:.76rem;font-family:inherit;cursor:pointer;outline:none
 font-size:.72rem;font-family:inherit;cursor:pointer;transition:.15s}
 .btn:hover{background:var(--ac4);color:#fff;border-color:var(--ac)}
 .btn.on{background:var(--ac4);color:#fff;border-color:var(--ac)}
+.tmore{display:flex;align-items:center;gap:12px;justify-content:center;padding:12px 0 2px}
+.tmore span{font-size:.72rem;color:var(--tx3)}
 .chip{font-size:.7rem;color:var(--ac2);background:rgba(0,180,216,.1);border:1px solid var(--bd);
 border-radius:20px;padding:5px 11px}
 main{padding:16px}
@@ -1429,6 +1431,7 @@ function buildRent(){
 }
 function renOK(d){ return d.pct>0 && d.pct<=100; }
 function renderRent(){
+  REN_LIMIT=TBL_PAGE;
   REN_ITEMS=buildRent();
   var nt=document.getElementById("ren-note");
   var val=REN_ITEMS.filter(renOK), raros=REN_ITEMS.length-val.length;
@@ -1494,6 +1497,20 @@ function renderRent(){
   rentTable2("t-ren-wb",REN_ITEMS.filter(function(d){return d.cc==="Bar";}).slice().sort(desc).slice(0,10));
   rentTableFull();
 }
+/* Las tablas largas se pintan por tramos: meter miles de <tr> de golpe congela
+   el navegador y casi nunca se leen completas. */
+var TBL_PAGE = 250, REN_LIMIT = 250, AC_LIMIT = 250;
+function pagedRows(d,limit){ return (limit>0 && d.length>limit) ? d.slice(0,limit) : d; }
+function moreHTML(tag,total,shown){
+  if(shown >= total) return "";
+  return '<div class="tmore"><button type="button" class="btn" data-more="'+tag+'">Mostrar '+
+    fmtN(Math.min(TBL_PAGE,total-shown))+' m&aacute;s</button><span>Mostrando '+fmtN(shown)+
+    ' de '+fmtN(total)+'</span></div>';
+}
+function bindMore(el,fn){
+  var b = el.querySelector("[data-more]");
+  if(b) b.onclick = fn;
+}
 function rentTableFull(){
   var el=document.getElementById("t-ren-full"); if(!el) return;
   var q=(document.getElementById("ren-search")||{}).value||"";
@@ -1506,10 +1523,11 @@ function rentTableFull(){
   var c0=document.getElementById("ren-count");
   if(c0) c0.textContent=fmtN(d.length)+" referencia"+(d.length===1?"":"s");
   if(!d.length){ el.innerHTML=emptyHTML("Sin resultados"); return; }
+  var vis=pagedRows(d,REN_LIMIT);
   var h='<table><thead><tr><th>#</th><th>Art&iacute;culo</th><th>Familia</th><th>Tarifa</th><th>CC</th>'+
     '<th class="n">Precio</th><th class="n">Impuesto</th><th class="n">Base</th><th class="n">Coste</th>'+
     '<th class="n">Margen (costo)</th><th class="n">Margen bruto</th></tr></thead><tbody>';
-  d.forEach(function(x,i){
+  vis.forEach(function(x,i){
     var raro=!renOK(x);
     h+='<tr>'+rkTd(i)+
       '<td class="nm" title="'+esc(x.art)+'">'+(raro?'&#9888; ':'')+esc(trim(x.art,34))+'</td>'+
@@ -1523,7 +1541,8 @@ function rentTableFull(){
       '<td class="n">'+tagCosto(x.pct)+'</td>'+
       '<td class="n">'+(raro? '<span class="tag bad">n/d</span>' : p1(100-x.pct))+'</td></tr>';
   });
-  el.innerHTML=h+'</tbody></table>';
+  el.innerHTML=h+'</tbody></table>'+moreHTML("ren",d.length,vis.length);
+  bindMore(el,function(){ REN_LIMIT+=TBL_PAGE; rentTableFull(); });
 }
 function bindRent(){
   var si=document.getElementById("ren-search");
@@ -1755,6 +1774,7 @@ function bindMV(){
 /* Tablero ejecutivo. Consume C() / calc() y la hoja RENTABILIDAD: no duplica formulas.
    El costo por producto se calibra para cuadrar con la Mercancia Vendida del periodo. */
 function renderAC(){
+  AC_LIMIT=TBL_PAGE;
   AC_ITEMS=buildAC();
   var c=C(), T=AC_TOT||{uds:0,base:0,util:0,cmProm:0,n:0};
   var neto=0, docs={}, nd=0;
@@ -2034,10 +2054,11 @@ function acMenu(){
   var c0=document.getElementById("ac-count");
   if(c0) c0.textContent=fmtN(d.length)+" producto"+(d.length===1?"":"s");
   if(!d.length){ el.innerHTML=emptyHTML("Sin resultados"); return; }
+  var vis=pagedRows(d,AC_LIMIT);
   var h='<table><thead><tr><th>#</th><th>Producto</th><th>Familia</th><th>CC</th><th>Clasificaci&oacute;n</th>'+
     '<th class="n">Uds</th><th class="n">Part. uds</th><th class="n">Venta</th><th class="n">Costo</th>'+
     '<th class="n">Utilidad</th><th class="n">Margen %</th><th class="n">Utilidad/und</th><th>Fuente costo</th></tr></thead><tbody>';
-  d.forEach(function(o,i){
+  vis.forEach(function(o,i){
     h+='<tr>'+rkTd(i)+
       '<td class="nm" title="'+esc(o.art)+'">'+esc(trim(o.art,32))+'</td>'+
       '<td class="nm">'+esc(trim(o.fam,18))+'</td>'+
@@ -2052,7 +2073,8 @@ function acMenu(){
       '<td class="n">'+fmtCOP(o.cmu)+'</td>'+
       '<td><span class="tag '+(o.src==="Ficha"?"coc":(o.src==="Compra"?"mid":"bad"))+'">'+o.src+'</span></td></tr>';
   });
-  el.innerHTML=h+'</tbody></table>';
+  el.innerHTML=h+'</tbody></table>'+moreHTML("ac",d.length,vis.length);
+  bindMore(el,function(){ AC_LIMIT+=TBL_PAGE; acMenu(); });
 }
 function bindAC(){
   var si=document.getElementById("ac-search");
