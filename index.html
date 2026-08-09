@@ -164,7 +164,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
  <button onclick="showTab('sec-rent',this)">&#128176; Rentabilidad</button>
  <button onclick="showTab('sec-part',this)">&#128200; Participaci&oacute;n</button>
  <button onclick="showTab('sec-inv',this)">&#128230; Inventarios</button>
- <button onclick="showTab('sec-mv',this)">&#129518; Mercanc&iacute;a Vendida</button><button onclick="showTab('sec-ac',this)">&#128202; An&aacute;lisis Comercial</button>
+ <button onclick="showTab('sec-mv',this)">&#129518; Mercanc&iacute;a Vendida</button>
 </nav>
 
 <div class="fbar" id="fbar" style="display:none">
@@ -333,33 +333,6 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
   <div id="t-mv"></div>
  </div>
  <div class="card"><h3>Compras por Familia <em>insumo del per&iacute;odo</em></h3><div class="cw h420"><canvas id="c-mv-fam"></canvas></div></div>
-</section>
-
-<section id="sec-ac">
-  <div class="note" id="ac-note"></div>
-  <div class="grid" id="k-ac"></div>
-  <div class="row2">
-    <div class="card"><h3>Productos con Mejor Margen <em>ranking por margen %</em></h3><div class="scroll" id="t-ac-margen"></div></div>
-    <div class="card"><h3>Productos que m&aacute;s Dinero Generan <em>ranking por utilidad total</em></h3><div class="scroll" id="t-ac-dinero"></div></div>
-  </div>
-  <div class="row2">
-    <div class="card"><h3>Productos m&aacute;s Vendidos <em>ranking por unidades</em></h3><div class="scroll" id="t-ac-vendidos"></div></div>
-    <div class="card"><h3>Productos con Bajo Margen <em>evaluar precio, receta o estrategia</em></h3><div class="scroll" id="t-ac-bajo"></div></div>
-  </div>
-  <div class="card"><h3>Productos que los meseros deben ofrecer primero <em>puntaje: margen 40% &middot; rotaci&oacute;n 30% &middot; utilidad 30%</em></h3><div class="scroll" id="t-ac-reco"></div></div>
-  <div class="row2">
-    <div class="card"><h3>Top 10 Mayor Utilidad</h3><div class="cw h340"><canvas id="c-ac-uti"></canvas></div></div>
-    <div class="card"><h3>Top 10 M&aacute;s Vendidos</h3><div class="cw h340"><canvas id="c-ac-uds"></canvas></div></div>
-  </div>
-  <div class="row2">
-    <div class="card"><h3>Top 10 Mejor Margen</h3><div class="cw h340"><canvas id="c-ac-marg"></canvas></div></div>
-    <div class="card"><h3>Participaci&oacute;n por Centro de Costo</h3><div class="cw h340"><canvas id="c-ac-cc"></canvas></div></div>
-  </div>
-  <div class="row2">
-    <div class="card"><h3>Distribuci&oacute;n de Ventas por Familia</h3><div class="cw h340"><canvas id="c-ac-fv"></canvas></div></div>
-    <div class="card"><h3>Distribuci&oacute;n de Costos por Familia</h3><div class="cw h340"><canvas id="c-ac-fc"></canvas></div></div>
-  </div>
-  <div class="card"><h3>Tendencia Mensual de Ventas y Rentabilidad <em>venta base por mes</em></h3><div class="cw h340"><canvas id="c-ac-tend"></canvas></div></div>
 </section>
 
 
@@ -1247,7 +1220,7 @@ function ccPred(k){ return function(r){ return (r.ccBiz || r.cc) === k; }; }
 var SEC_RENDER = {
   "sec-resumen":"renderResumen", "sec-ventas":"renderVentas", "sec-compras":"renderCompras",
   "sec-costo":"renderCosto",     "sec-rent":"renderRent",     "sec-part":"renderPart",
-  "sec-inv":"renderInv",         "sec-mv":"renderMV", "sec-ac":"renderAC"
+  "sec-inv":"renderInv",         "sec-mv":"renderMV"
 };
 var SEC_DIRTY = {};
 function activeSecId(){
@@ -2054,48 +2027,7 @@ function bindMV(){
 }
 
 
-/* ====================== 9. ANALISIS COMERCIAL ====================== */
-function renderAC(){
-  REN_ITEMS = buildRent();
-  var items = REN_ITEMS, T = REN_TOT;
-  var conF = items.filter(function(o){return o.ficha;});
-  var udsF = conF.reduce(function(a,o){return a+o.uds;},0);
-  var docs = {}; FILTERED.ventas.forEach(function(r){ if(r.doc) docs[r.doc]=1; });
-  var nFac = Object.keys(docs).length;
-  var vBase = T.base, costo = T.costo, util = T.util, mpct = T.mpct, uds = T.uds;
-  var ticket = safeDiv(vBase, nFac), costoProm = safeDiv(costo, udsF);
-  var nt = document.getElementById("ac-note");
-  if(nt) nt.innerHTML = "Tablero ejecutivo. Consolida ventas y la hoja RENTABILIDAD del mismo per&iacute;odo filtrado. "+
-    "<b>"+fmtN(conF.length)+"</b> productos con ficha de costo de <b>"+fmtN(items.length)+"</b> vendidos.";
-  kpiGrid("k-ac",[
-    {icon:"&#128176;",label:"Venta Total (base neta)",value:fmtM(vBase),sub:fmtCOP(vBase),note:"sin IVA, sin propinas",color:"#06d6a0",bar:"#7209b7,#3a86ff"},
-    {icon:"&#129534;",label:"Costo Total (fichas)",value:fmtM(costo),sub:fmtCOP(costo),note:"hoja RENTABILIDAD",color:"#e67e22",bar:"#c0392b,#e74c3c"},
-    {icon:"&#128200;",label:"Utilidad Bruta",value:fmtM(util),sub:fmtCOP(util),note:"venta base - costo",color:(util>=0?"#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"},
-    {icon:"&#127919;",label:"Margen Bruto",value:p1(mpct),sub:fmtCOP(util),note:"utilidad / venta base",color:"#06d6a0",bar:"#27ae60,#06d6a0"},
-    {icon:"&#129299;",label:"Ticket Promedio",value:fmtCOP(ticket),sub:fmtCOP(ticket),note:fmtN(nFac)+" facturas",color:"#00b4d8",bar:"#0077b6,#00b4d8"},
-    {icon:"&#128203;",label:"N&uacute;mero de Facturas",value:fmtN(nFac),sub:fmtN(nFac)+" facturas",note:"documentos distintos",color:"#00b4d8",bar:"#0077b6,#00b4d8"},
-    {icon:"&#128230;",label:"Productos Vendidos (uds)",value:fmtN(uds),sub:fmtN(uds)+" uds",note:fmtN(items.length)+" productos",color:"#00b4d8",bar:"#0077b6,#00b4d8"},
-    {icon:"&#127860;",label:"Costo Promedio x Plato",value:fmtCOP(costoProm),sub:fmtCOP(costoProm),note:"costo fichas / unidades",color:"#e67e22",bar:"#c0392b,#e67e22"}
-  ]);
-  renRank("t-ac-margen", conF.slice().sort(function(a,b){return b.mpct-a.mpct;}).slice(0,15), false);
-  renRank("t-ac-dinero", conF.slice().sort(function(a,b){return b.util-a.util;}).slice(0,15), false);
-  renRank("t-ac-vendidos", conF.slice().sort(function(a,b){return b.uds-a.uds;}).slice(0,15), false);
-  renRank("t-ac-bajo", conF.slice().sort(function(a,b){return a.mpct-b.mpct;}).slice(0,15), true);
-  renRank("t-ac-reco", conF.slice().sort(function(a,b){return b.score-a.score;}).slice(0,15), false);
-  hbar("c-ac-uti", conF.slice().sort(function(a,b){return b.util-a.util;}).slice(0,10).map(function(o){return {k:o.art,v:o.util};}), null);
-  hbar("c-ac-uds", conF.slice().sort(function(a,b){return b.uds-a.uds;}).slice(0,10).map(function(o){return {k:o.art,v:o.uds};}), null);
-  hbar("c-ac-marg", conF.slice().sort(function(a,b){return b.mpct-a.mpct;}).slice(0,10).map(function(o){return {k:o.art,v:o.mpct};}), null);
-  var ccMap={}; conF.forEach(function(o){ ccMap[o.cc]=(ccMap[o.cc]||0)+o.base; });
-  doughnut("c-ac-cc", Object.keys(ccMap), Object.keys(ccMap).map(function(k){return ccMap[k];}), null);
-  function famAgg(field){ var m={}; conF.forEach(function(o){ m[o.fam]=(m[o.fam]||0)+o[field]; });
-    return Object.keys(m).map(function(k){return {k:k,v:m[k]};}).sort(function(a,b){return b.v-a.v;}).slice(0,12); }
-  var fv=famAgg("base"), fc=famAgg("costo");
-  doughnut("c-ac-fv", fv.map(function(d){return d.k;}), fv.map(function(d){return d.v;}), null);
-  doughnut("c-ac-fc", fc.map(function(d){return d.k;}), fc.map(function(d){return d.v;}), null);
-  var meses = uniq(FILTERED.ventas,"mes").sort(mesSort);
-  var vpm = meses.map(function(m){ var s=0; FILTERED.ventas.forEach(function(r){ if(r.mes===m && !r.esPropina) s+=(+r.base||0); }); return Math.round(s); });
-  barV("c-ac-tend", meses.map(function(m){return m.toUpperCase();}), vpm, vpm.map(function(){return "#3a86ff";}), false, true, 0, null);
-}
+
 
 /* ====================== INICIO ====================== */
 document.addEventListener("DOMContentLoaded",function(){
