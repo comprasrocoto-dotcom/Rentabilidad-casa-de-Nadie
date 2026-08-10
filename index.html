@@ -658,7 +658,7 @@ function parseExcel(wb){
   J(shC).forEach(function(r){
     var art=up(col(r,AKW));
     var total=colN(r,["total neto","total"]);
-    if(!art || !total) return;
+    if(!total) return;
     var sede=cleanSede(col(r,["almac","establec","sede"]));
     RAW.compras.push({
       sede:sede, esPlanta:(sede.indexOf("PLANTA")>=0),
@@ -1257,7 +1257,7 @@ function renderResumen(){
      note:"Base neta del informe de ventas (sin IVA, sin propinas)",bar:"#00b4d8,#48cae4"},
     {icon:"&#128230;",label:"Inventario Inicial",value:fmt(c.invIni),sub:fmtCOP(c.invIni),
      note:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128722;",label:"Compras Totales",value:fmt(c.compras),sub:fmtCOP(c.compras),
+    {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
@@ -1514,7 +1514,7 @@ function renderRent(){
      note:"Base neta del informe (sin IVA, sin propinas) &middot; hoja RENTABILIDAD",bar:"#00b4d8,#48cae4"},
     {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(c.invIni),sub:fmtCOP(c.invIni),
      note:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128722;",label:"Compras Totales",value:fmtM(c.compras),sub:fmtCOP(c.compras),
+    {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmtM(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
     {icon:"&#128203;",label:"Inventario Final",value:fmtM(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
