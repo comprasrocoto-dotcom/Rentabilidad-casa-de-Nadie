@@ -1510,22 +1510,22 @@ function renderRent(){
   var T=REN_TOT, c=C();
   var _baseR=T.base, _mvR=c.mv, _cgR=safeDiv(_mvR,_baseR)*100, _utR=_baseR-_mvR, _utpR=safeDiv(_utR,_baseR)*100;
   kpiGrid("k-ren-top",[
-    {icon:"&#128176;",label:"Ventas Totales",value:fmtM(_baseR),sub:fmtCOP(_baseR),
-     note:"Base neta del informe (sin IVA, sin propinas) &middot; hoja RENTABILIDAD",bar:"#00b4d8,#48cae4"},
-    {icon:"&#128230;",label:"Inventario Inicial",value:fmtM(c.invIni),sub:fmtCOP(c.invIni),
+    {icon:"&#128176;",label:"Ventas Totales",value:fmt(c.ventas),sub:fmtCOP(c.ventas),
+     note:"Base neta del informe de ventas (sin IVA, sin propinas)",bar:"#00b4d8,#48cae4"},
+    {icon:"&#128230;",label:"Inventario Inicial",value:fmt(c.invIni),sub:fmtCOP(c.invIni),
      note:conteoLbl(c,"ini"),bar:"#0077b6,#00b4d8"},
-    {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmtM(c.compras),sub:fmtCOP(c.compras),
+    {icon:"&#128722;",label:"Compras Bar + Cocina",value:fmt(c.compras),sub:fmtCOP(c.compras),
      note:"Solo centros de costo Bar y Cocina",bar:"#e67e22,#f39c12"},
-    {icon:"&#128203;",label:"Inventario Final",value:fmtM(c.invFin),sub:fmtCOP(c.invFin),
+    {icon:"&#128203;",label:"Inventario Final",value:fmt(c.invFin),sub:fmtCOP(c.invFin),
      note:conteoLbl(c,"fin"),bar:"#0096c7,#90e0ef"},
-    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmtM(_mvR),sub:fmtCOP(_mvR),
+    {icon:"&#127859;",label:"Mercanc&iacute;a Vendida",value:fmt(c.mv),sub:fmtCOP(c.mv),
      note:mvSrcShort(),bar:"#c0392b,#e74c3c"},
-    {icon:"&#128201;",label:"Costo Global",value:p1(_cgR),sub:fmtCOP(_mvR),
-     note:"Mercanc&iacute;a Vendida / Ventas Base Neta",color:colorCosto(_cgR),
-     bar:(_cgR<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")},
-    {icon:"&#128200;",label:"Utilidad Bruta",value:fmtM(_utR),sub:fmtCOP(_utR),
-     note:p1(_utpR)+" sobre la base neta de ventas",
-     color:(_utR>=0? "#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"}
+    {icon:"&#128201;",label:"Costo Global",value:p1(c.costoPct),sub:fmtCOP(c.mv),
+     note:(c.costoPct<=META? "&#10003; Bajo meta ("+p1(META)+")":"&#9888; Por encima de la meta ("+p1(META)+")"),
+     color:colorCosto(c.costoPct),bar:(c.costoPct<=META? "#27ae60,#06d6a0":"#c0392b,#e74c3c")},
+    {icon:"&#128200;",label:"Utilidad Bruta",value:fmt(c.utilidad),sub:fmtCOP(c.utilidad),
+     note:p1(c.utilidadPct)+" sobre la base neta de ventas",
+     color:(c.utilidad>=0? "#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"}
   ]);
   var sinF=T.n-T.nf;
   var nt=document.getElementById("ren-note");
