@@ -261,7 +261,10 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
 <section id="sec-rent">
  <div class="note" id="ren-note"></div>
  <div class="grid" id="k-ren-top"></div>
- <div class="grid" id="k-ren"></div>
+ <div class="row2">
+  <div class="card"><h3>Base del Juego de Inventarios <em>Ventas Bar + Cocina vs. excluidas</em></h3><div class="cw h300"><canvas id="c-ren-excl"></canvas></div></div>
+  <div class="card"><h3>Ventas usadas en el Juego de Inventarios <em>Bar + Cocina vs. Ventas Totales</em></h3><div id="ren-excl-detail" class="excl-detail"></div></div>
+</div>
 
   
 <div class="row3">
@@ -1556,6 +1559,8 @@ function renderRent(){
      note:p1(c.utilidadPct)+" sobre la base neta de ventas",
      color:(c.utilidad>=0? "#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"}
   ]);
+  {var _vt=c.ventas, _vbc=c.ventasBC, _vex=c.ventasExcl; var _pbc=safeDiv(_vbc,_vt)*100, _pex=safeDiv(_vex,_vt)*100; hbar("c-ren-excl",[{k:"Bar + Cocina",v:_vbc},{k:"Excluidas",v:_vex}],["#0077b6","#e74c3c"],300,false,false); var _ppex=(Math.round(_pex*10)/10).toString().replace(".",","); var _ed=document.getElementById("ren-excl-detail"); if(_ed){_ed.innerHTML="<div class=\"ed-row\"><span class=\"ed-lbl\">Ventas Totales</span><span class=\"ed-val\">"+fmtCOP(_vt)+"</span></div>"+"<div class=\"ed-row\"><span class=\"ed-lbl\">Ventas Base Juego de Inventarios</span><span class=\"ed-val\">"+fmtCOP(_vbc)+"</span><span class=\"ed-pct\">"+p1(_pbc)+"</span></div>"+"<div class=\"ed-row\"><span class=\"ed-lbl\">Ventas Excluidas del Juego</span><span class=\"ed-val\">"+fmtCOP(_vex)+"</span><span class=\"ed-pct\">"+p1(_pex)+"</span></div>"+"<div class=\"ed-row ed-pp\"><span class=\"ed-lbl\">Puntos porcentuales excluidos</span><span class=\"ed-val\">"+_ppex+" p.p.</span></div>"+"<div class=\"ed-note\">Ventas Base Juego de Inventarios = Base Neta solo Bar + Cocina. Costo Global = Mercanc&iacute;a Vendida / Ventas Base. Ventas Totales NO se usa como denominador.</div>"+"<div class=\"ed-check\">Validaci&oacute;n: "+fmtCOP(_vbc)+" + "+fmtCOP(_vex)+" = "+fmtCOP(_vbc+_vex)+" (Ventas Totales "+fmtCOP(_vt)+") &middot; "+p1(_pbc+_pex)+"</div>"; var _dif=Math.abs((_vbc+_vex)-_vt); if(_dif>1) console.warn("Ventas Excluidas (Rent): descuadre "+_dif); var _sp=_pbc+_pex; if(Math.abs(_sp-100)>0.05) console.warn("Ventas Excluidas (Rent): %suma "+_sp);}}
+
   var sinF=T.n-T.nf;
   var nt=document.getElementById("ren-note");
   if(nt){
@@ -1593,30 +1598,7 @@ function renderRent(){
   var ticket=safeDiv(c.ventas,nd);
   var cpp=safeDiv(T.costo,T.uds);
   var okMeta=T.cpct<=META;
-  kpiGrid("k-ren",[
-    {icon:"&#128176;",label:"Venta Base",value:fmtM(T.base),sub:fmtCOP(T.base),
-     note:"Sin IVA y sin propinas &middot; hoja VENTAS",bar:"#00b4d8,#48cae4"},
-    {icon:"&#129534;",label:"Costo de Fichas",value:fmtM(T.costo),sub:fmtCOP(T.costo),
-     note:"Hoja RENTABILIDAD &times; unidades vendidas",color:"#e67e22",bar:"#c0392b,#e74c3c"},
-    {icon:"&#128200;",label:"Utilidad Bruta",value:fmtM(T.util),sub:fmtCOP(T.util),
-     note:"Venta Base - Costo",color:(T.util>=0?"#06d6a0":"#e74c3c"),bar:"#7209b7,#3a86ff"},
-    {icon:"&#128202;",label:"Margen Bruto",value:p1(T.mpct),sub:fmtCOP(T.util),
-     note:"Utilidad / Venta Base",color:(T.mpct>=100-META?"#06d6a0":"#e74c3c"),bar:"#27ae60,#06d6a0"},
-    {icon:"&#128201;",label:"Costo sobre Venta",value:p1(T.cpct),sub:fmtCOP(T.costo),
-     note:(okMeta? "&#10003; Bajo la meta ("+p1(META)+")" : "&#9888; Por encima de la meta ("+p1(META)+")"),
-     color:colorCosto(T.cpct),bar:(okMeta?"#27ae60,#06d6a0":"#c0392b,#e74c3c")},
-    {icon:"&#9888;&#65039;",label:"Productos sobre el 35%",value:fmtN(T.nw),sub:fmtCOP(T.baseW),
-     note:"Venta base con costo por encima de la meta",
-     color:(T.nw? "#e74c3c":"#06d6a0"),bar:(T.nw?"#c0392b,#e74c3c":"#27ae60,#06d6a0")},
-    {icon:"&#127869;&#65039;",label:"Unidades Vendidas",value:fmtN(T.uds),sub:fmtN(T.n)+" productos distintos",
-     note:fmtN(T.nf)+" con ficha de costo",bar:"#0077b6,#00b4d8"},
-    {icon:"&#129534;",label:"N&uacute;mero de Facturas",value:fmtN(nd),sub:fmtCOP(ticket),
-     note:"Ticket promedio por factura",bar:"#3a86ff,#48cae4"},
-    {icon:"&#128176;",label:"Ticket Promedio",value:fmtCOP(ticket),sub:fmtCOP(c.ventas),
-     note:"Venta base neta del per&iacute;odo / facturas",bar:"#7209b7,#3a86ff"},
-    {icon:"&#127860;",label:"Costo Promedio por Plato",value:fmtCOP(cpp),sub:fmtCOP(T.costo),
-     note:"Costo total de fichas / unidades vendidas",bar:"#c0392b,#e67e22"}
-  ]);
+  
   renCharts();
   renTrend();
   renRank("t-ren-best", REN_ITEMS.filter(function(o){return o.ficha;}).slice().sort(function(a,b){return b.mpct-a.mpct;}).slice(0,15), false);
