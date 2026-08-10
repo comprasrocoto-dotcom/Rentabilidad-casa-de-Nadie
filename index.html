@@ -1306,9 +1306,9 @@ function renderResumen(){
   var _ed = document.getElementById("res-excl-detail");
   if(_ed) _ed.innerHTML =
     '<div class="ed-row"><span class="ed-lbl">Ventas Totales</span><span class="ed-val">'+fmtCOP(_vt)+'</span></div>'
-    + '<div class="ed-row"><span class="ed-lbl">Ventas Bar + Cocina</span><span class="ed-val" style="color:#0077b6">'+fmtCOP(_vbc)+'</span><span class="ed-pct">'+p1(_pbc)+'%</span></div>'
-    + '<div class="ed-row"><span class="ed-lbl">Ventas Excluidas</span><span class="ed-val" style="color:#e74c3c">'+fmtCOP(_vex)+'</span><span class="ed-pct">'+p1(_pex)+'%</span></div>'
-    + '<div class="ed-row ed-pp"><span class="ed-lbl">Puntos porcentuales excluidos</span><span class="ed-val">'+p1(_pex)+' p.p.</span></div>'
+    + '<div class="ed-row"><span class="ed-lbl">Ventas Bar + Cocina</span><span class="ed-val" style="color:#0077b6">'+fmtCOP(_vbc)+'</span><span class="ed-pct">'+p1(_pbc)+'</span></div>'
+    + '<div class="ed-row"><span class="ed-lbl">Ventas Excluidas</span><span class="ed-val" style="color:#e74c3c">'+fmtCOP(_vex)+'</span><span class="ed-pct">'+p1(_pex)+'</span></div>'
+    + '<div class="ed-row ed-pp"><span class="ed-lbl">Puntos porcentuales excluidos</span><span class="ed-val">'+(Math.round(_pex*10)/10).toString().replace('.',',')+' p.p.</span></div>'
     + '<div class="ed-note">Excluidas = Totales &minus; Bar+Cocina. % Excluidas = Excluidas / Totales. Costo Global se calcula sobre Ventas Bar + Cocina.</div>'
     + '<div class="ed-check">Validaci&oacute;n: Bar+Cocina + Excluidas = '+fmtCOP(_vbc+_vex)+' (dif '+fmtCOP(_dif)+'). % suma = '+p1(_sumPct)+'%</div>';
   if(Math.abs(_dif) > 1) console.warn("Ventas BC + Excluidas != Totales, dif=" + _dif);
