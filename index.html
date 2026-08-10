@@ -1300,7 +1300,7 @@ function renderResumen(){
   /* ---- Informe: Ventas Excluidas del Juego de Inventarios ---- */
   var _vt = c.ventas, _vbc = c.ventasBC, _vex = c.ventasExcl;
   var _pbc = safeDiv(_vbc,_vt)*100, _pex = safeDiv(_vex,_vt)*100;
-  hbar("c-res-excl",[{label:"Bar + Cocina",value:_vbc},{label:"Excluidas",value:_vex}],["#0077b6","#e74c3c"],300,false,false);
+  hbar("c-res-excl",[{k:"Bar + Cocina",v:_vbc},{k:"Excluidas",v:_vex}],["#0077b6","#e74c3c"],300,false,false);
   var _dif = _vt - (_vbc + _vex);
   var _sumPct = _pbc + _pex;
   var _ed = document.getElementById("res-excl-detail");
@@ -1310,7 +1310,7 @@ function renderResumen(){
     + '<div class="ed-row"><span class="ed-lbl">Ventas Excluidas</span><span class="ed-val" style="color:#e74c3c">'+fmtCOP(_vex)+'</span><span class="ed-pct">'+p1(_pex)+'</span></div>'
     + '<div class="ed-row ed-pp"><span class="ed-lbl">Puntos porcentuales excluidos</span><span class="ed-val">'+(Math.round(_pex*10)/10).toString().replace('.',',')+' p.p.</span></div>'
     + '<div class="ed-note">Excluidas = Totales &minus; Bar+Cocina. % Excluidas = Excluidas / Totales. Costo Global se calcula sobre Ventas Bar + Cocina.</div>'
-    + '<div class="ed-check">Validaci&oacute;n: Bar+Cocina + Excluidas = '+fmtCOP(_vbc+_vex)+' (dif '+fmtCOP(_dif)+'). % suma = '+p1(_sumPct)+'%</div>';
+    + '<div class="ed-check">Validaci&oacute;n: Bar+Cocina + Excluidas = '+fmtCOP(_vbc+_vex)+' (dif '+fmtCOP(_dif)+'). % suma = '+p1(_sumPct)+'</div>';
   if(Math.abs(_dif) > 1) console.warn("Ventas BC + Excluidas != Totales, dif=" + _dif);
   if(Math.abs(_sumPct - 100) > 0.05 && _vt) console.warn("% BC + % Excluidas != 100, suma=" + _sumPct);
 }
