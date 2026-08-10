@@ -740,7 +740,7 @@ function ccOf(art,fam){
   if(m && (m.Bar||m.Cocina)) return (m.Bar>m.Cocina)? "Bar" : "Cocina";
   var f=FAM_CC[fam];
   if(f && (f.Bar||f.Cocina)) return (f.Bar>f.Cocina)? "Bar" : "Cocina";
-  return "Bar";
+  return "Otros";
 }
 function unitCost(art){
   var c=COST_MAP[art];
