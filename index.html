@@ -145,6 +145,14 @@ background:rgba(231,76,60,.18);color:var(--dg);border:1px solid rgba(231,76,60,.
 .flag.ok{background:rgba(6,214,160,.15);color:var(--ok);border-color:rgba(6,214,160,.3)}
 html[data-theme="light"] .card{box-shadow:0 1px 3px var(--sh)}
 html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
+.excl-detail{display:flex;flex-direction:column;gap:8px;padding:6px 2px;}
+.excl-detail .ed-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--sf2);}
+.excl-detail .ed-lbl{color:var(--mu);font-size:13px;}
+.excl-detail .ed-val{font-weight:700;font-size:15px;color:var(--tx);margin-left:auto;}
+.excl-detail .ed-pct{min-width:56px;text-align:right;color:var(--tx2);font-size:13px;}
+.excl-detail .ed-pp{background:transparent;border-style:dashed;}
+.excl-detail .ed-note{color:var(--mu);font-size:11px;line-height:1.4;margin-top:2px;}
+.excl-detail .ed-check{color:var(--ok);font-size:11px;font-weight:600;}
 </style>
 </head>
 <body>
@@ -197,6 +205,10 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
  <div class="row2">
   <div class="card"><h3>Top 5 Categor&iacute;as Venta</h3><div class="cw h260"><canvas id="c-res-catv"></canvas></div></div>
   <div class="card"><h3>Top 5 Categor&iacute;as Compra</h3><div class="cw h260"><canvas id="c-res-catc"></canvas></div></div>
+ </div>
+ <div class="row2">
+  <div class="card"><h3>Ventas Excluidas del Juego de Inventarios <em>Bar + Cocina vs. excluidas</em></h3><div class="cw h300"><canvas id="c-res-excl"></canvas></div></div>
+  <div class="card"><h3>Distribuci&oacute;n de Ventas <em>sobre el 100%</em></h3><div id="res-excl-detail" class="excl-detail"></div></div>
  </div>
 </section>
 
@@ -1144,6 +1156,7 @@ function calc(pred){
   var p = pred || TRUE_PRED;
   var ventas = 0, compras = 0;
   FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r)) ventas += r.base; });
+  var ventasBC = 0; FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r) && (r.cc==="Bar"||r.cc==="Cocina")) ventasBC += r.base; });
   FILTERED.compras.forEach(function(r){ if(p(r)) compras += r.total; });
 
   var cs = invConteos(p);
@@ -1161,11 +1174,11 @@ function calc(pred){
   /* sin los dos conteos el juego de inventarios no es aplicable: se usan las compras del periodo */
   var mv = completo ? (ini + compras - fin) : compras;
   return {
-    ventas:ventas, compras:compras,
+    ventas:ventas, ventasBC:ventasBC, ventasExcl:(ventas-ventasBC), ventasExclPct:safeDiv(ventas-ventasBC,ventas)*100, compras:compras,
     invIni:ini, invFin:fin, hasIni:hasIni, hasFin:hasFin, fIni:fIni, fFin:fFin,
     conteos:cs.length, completo:completo,
     mv:mv,
-    costoPct:safeDiv(mv,ventas)*100,
+    costoPct:safeDiv(mv,ventasBC)*100,
     utilidad:ventas-mv,
     utilidadPct:safeDiv(ventas-mv,ventas)*100
   };
@@ -1284,6 +1297,22 @@ function renderResumen(){
 
   hbar("c-res-catv",groupBy(FILTERED.ventas,"fam","base",5),P,260,true,false);
   hbar("c-res-catc",groupBy(FILTERED.compras,"fam","total",5),["#e67e22","#f39c12","#d35400","#e74c3c","#c0392b"],260,false,false);
+  /* ---- Informe: Ventas Excluidas del Juego de Inventarios ---- */
+  var _vt = c.ventas, _vbc = c.ventasBC, _vex = c.ventasExcl;
+  var _pbc = safeDiv(_vbc,_vt)*100, _pex = safeDiv(_vex,_vt)*100;
+  hbar("c-res-excl",[{label:"Bar + Cocina",value:_vbc},{label:"Excluidas",value:_vex}],["#0077b6","#e74c3c"],300,false,false);
+  var _dif = _vt - (_vbc + _vex);
+  var _sumPct = _pbc + _pex;
+  var _ed = document.getElementById("res-excl-detail");
+  if(_ed) _ed.innerHTML =
+    '<div class="ed-row"><span class="ed-lbl">Ventas Totales</span><span class="ed-val">'+fmtCOP(_vt)+'</span></div>'
+    + '<div class="ed-row"><span class="ed-lbl">Ventas Bar + Cocina</span><span class="ed-val" style="color:#0077b6">'+fmtCOP(_vbc)+'</span><span class="ed-pct">'+p1(_pbc)+'%</span></div>'
+    + '<div class="ed-row"><span class="ed-lbl">Ventas Excluidas</span><span class="ed-val" style="color:#e74c3c">'+fmtCOP(_vex)+'</span><span class="ed-pct">'+p1(_pex)+'%</span></div>'
+    + '<div class="ed-row ed-pp"><span class="ed-lbl">Puntos porcentuales excluidos</span><span class="ed-val">'+p1(_pex)+' p.p.</span></div>'
+    + '<div class="ed-note">Excluidas = Totales &minus; Bar+Cocina. % Excluidas = Excluidas / Totales. Costo Global se calcula sobre Ventas Bar + Cocina.</div>'
+    + '<div class="ed-check">Validaci&oacute;n: Bar+Cocina + Excluidas = '+fmtCOP(_vbc+_vex)+' (dif '+fmtCOP(_dif)+'). % suma = '+p1(_sumPct)+'%</div>';
+  if(Math.abs(_dif) > 1) console.warn("Ventas BC + Excluidas != Totales, dif=" + _dif);
+  if(Math.abs(_sumPct - 100) > 0.05 && _vt) console.warn("% BC + % Excluidas != 100, suma=" + _sumPct);
 }
 
 /* ====================== 2. VENTAS ====================== */
@@ -1371,7 +1400,7 @@ function renderCosto(){
   var c = C();
   var nt = document.getElementById("cos-note");
   if(nt) nt.innerHTML =
-    "<b>Periodo: " + periodoLbl() + ".</b> Costo Global = Mercanc&iacute;a Vendida / Ventas Base Neta. " +
+    "<b>Periodo: " + periodoLbl() + ".</b> Costo Global = Mercanc&iacute;a Vendida / Ventas Bar + Cocina. " +
     "Mercanc&iacute;a Vendida = Inv. Inicial + Compras - Inv. Final, con las <b>compras de Bar y Cocina</b> &uacute;nicamente. " +
     "C&aacute;lculo actual: " + mvSrcNote() + ". Meta: " + META + "%.";
 
@@ -1970,7 +1999,7 @@ function renderMV(){
   if(nt) nt.innerHTML=
     "<b>Periodo: "+periodoLbl()+".</b> Mercanc&iacute;a Vendida = Inventario Inicial + Compras - Inventario Final. " +
     "Las <b>Compras</b> incluyen &uacute;nicamente los centros de costo <b>Bar</b> y <b>Cocina</b>. " +
-    "Costo Mercanc&iacute;a Vendida % = Mercanc&iacute;a Vendida / Ventas Base Neta. " +
+    "Costo Mercanc&iacute;a Vendida % = Mercanc&iacute;a Vendida / Ventas Bar + Cocina. " +
     "Utilidad Bruta = Ventas - Mercanc&iacute;a Vendida. C&aacute;lculo actual: "+mvSrcNote()+".";
 
   kpiGrid("k-mv",[
