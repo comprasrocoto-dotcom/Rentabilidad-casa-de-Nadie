@@ -256,6 +256,7 @@ html[data-theme="light"] nav button:hover{background:rgba(0,119,182,.06)}
   <div class="card"><h3>Detalle Cocina <em>merc. vendida / ventas</em></h3><div id="d-cos-cocina"></div></div>
   <div class="card"><h3>Detalle Bar <em>merc. vendida / ventas</em></h3><div id="d-cos-bar"></div></div>
  </div>
+ <div class="card"><h3>Auditor&iacute;a de Centro de Costo <em>de d&oacute;nde sale cada valor de Compras e Inventario, tal como llega del Excel</em></h3><div id="d-cos-audit"></div></div>
  </section>
 
 <section id="sec-rent">
@@ -1159,7 +1160,7 @@ function calc(pred){
   var p = pred || TRUE_PRED;
   var ventas = 0, compras = 0;
   FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r)) ventas += r.base; });
-  var ventasBC = 0; FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r) && (r.cc==="Bar"||r.cc==="Cocina")) ventasBC += r.base; });
+  var ventasBC = 0; FILTERED.ventas.forEach(function(r){ if(!r.esPropina && p(r) && ((r.ccBiz||r.cc)==="Bar"||(r.ccBiz||r.cc)==="Cocina")) ventasBC += r.base; });
   FILTERED.compras.forEach(function(r){ if(p(r)) compras += r.total; });
 
   var cs = invConteos(p);
@@ -1438,7 +1439,7 @@ function renderCosto(){
   barV("c-cos-cc",ccs,ccp,ccp.map(colorCosto),true,true,0,[0,60]);
 
   var ms=uniq(FILTERED.ventas,"mes").sort(mesSort);
-  var series=[].map(function(x){
+  var series=ccs.map(function(x){
     return {name:x, data:ms.map(function(m){
       var k = calc(function(r){ return (r.ccBiz||r.cc)===x && r.mes===m; });
       return +(k.costoPct).toFixed(1);
@@ -1453,6 +1454,38 @@ function renderCosto(){
   semRows("d-cos-cocina",costRows("Cocina"));
   semRows("d-cos-bar",costRows("Bar"));
 
+  ccAudit();
+}
+/* Auditoria de Centro de Costo: muestra tal cual llega la columna del Excel
+   (antes de cualquier clasificacion Bar/Cocina), para diagnosticar si el
+   desbalance entre Costo Cocina y Costo Bar viene de como esta etiquetado
+   el dato de origen en Compras/Inventarios (no de un calculo del tablero). */
+function ccAudit(){
+  var el=document.getElementById("d-cos-audit"); if(!el) return;
+  function tally(rows){
+    var m={};
+    rows.forEach(function(r){
+      var k=r.cc||"(vac\u00edo)";
+      if(!m[k]) m[k]={n:0,total:0};
+      m[k].n++; m[k].total+=(r.total||0);
+    });
+    return m;
+  }
+  function rowsHTML(title,t){
+    var keys=Object.keys(t).sort(function(a,b){ return t[b].total-t[a].total; });
+    if(!keys.length) return '<div class="note">Sin filas de '+title+' en el periodo filtrado.</div>';
+    var h='<div style="font-weight:600;margin:10px 0 4px">'+title+'</div><table><thead><tr>'+
+          '<th>Centro de Costo (tal como llega del Excel)</th><th class="n">Filas</th><th class="n">Total</th></tr></thead><tbody>';
+    keys.forEach(function(k){
+      h+='<tr><td class="nm">'+esc(k)+'</td><td class="n">'+fmtN(t[k].n)+'</td><td class="n">'+fmtCOP(t[k].total)+'</td></tr>';
+    });
+    return h+'</tbody></table>';
+  }
+  el.innerHTML =
+    '<div class="note">Columna Centro de Costo tal cual llega del Excel, antes de cualquier clasificaci&oacute;n. '+
+    'Si Cocina o Bar aparecen con muy pocas filas o un total muy bajo aqu&iacute;, el problema est&aacute; en '+
+    'c&oacute;mo esas filas est&aacute;n etiquetadas en el Google Sheet (Compras o Inventarios), no en el c&aacute;lculo del tablero.</div>'+
+    rowsHTML("Compras", tally(FILTERED.compras)) + rowsHTML("Inventarios", tally(FILTERED.inv));
 }
 </script><script>
 /* ====================== 5. RENTABILIDAD ====================== */
