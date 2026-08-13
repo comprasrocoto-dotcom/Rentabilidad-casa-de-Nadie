@@ -476,6 +476,16 @@ function col(row,kws){
   }
   return "";
 }
+/* igual que col(), pero devuelve el NOMBRE de la columna detectada (no el valor).
+   Sirve para auditar cual encabezado real se esta leyendo, por si el Excel tiene
+   mas de una columna que coincide con la misma palabra clave. */
+function colKey(row,kws){
+  for(var k in row){
+    var lk=k.toLowerCase();
+    for(var i=0;i<kws.length;i++){ if(lk.indexOf(kws[i])>=0) return k; }
+  }
+  return null;
+}
 /* busca una columna por palabras clave ignorando las que contengan alguna palabra vetada */
 function colNx(row,kws,veto){
   for(var k in row){
@@ -671,7 +681,9 @@ function parseExcel(wb){
   /* ---------- COMPRAS ---------- */
   var shC=findSheet(wb,["COMPRA"]);
   RAW.compras=[];
-  J(shC).forEach(function(r){
+  var rowsC = J(shC);
+  var CC_COL = { compras: (rowsC.length? colKey(rowsC[0],["centr"]) : null) };
+  rowsC.forEach(function(r){
     var art=up(col(r,AKW));
     var total=colN(r,["total neto","total"]);
     if(!total) return;
@@ -695,7 +707,10 @@ function parseExcel(wb){
   /* ---------- INVENTARIOS ---------- */
   var shI=findSheet(wb,["INVENTARIO"]);
   RAW.inv=[];
-  J(shI).forEach(function(r){
+  var rowsI = J(shI);
+  CC_COL.inv = (rowsI.length? colKey(rowsI[0],["centr"]) : null);
+  window.CC_COL_DEBUG = CC_COL;
+  rowsI.forEach(function(r){
     var art=up(col(r,AKW));
     var sede=cleanSede(col(r,["almac","establec","sede"]));
     if(!sede || !art) return;
@@ -1481,10 +1496,15 @@ function ccAudit(){
     });
     return h+'</tbody></table>';
   }
+  var dbg = (typeof window!=="undefined" && window.CC_COL_DEBUG) || {};
   el.innerHTML =
     '<div class="note">Columna Centro de Costo tal cual llega del Excel, antes de cualquier clasificaci&oacute;n. '+
     'Si Cocina o Bar aparecen con muy pocas filas o un total muy bajo aqu&iacute;, el problema est&aacute; en '+
     'c&oacute;mo esas filas est&aacute;n etiquetadas en el Google Sheet (Compras o Inventarios), no en el c&aacute;lculo del tablero.</div>'+
+    '<div class="note">Columna que el tablero est&aacute; leyendo como Centro de Costo &mdash; '+
+    'Compras: <b>'+(dbg.compras? esc(dbg.compras) : "no se encontr&oacute; ninguna columna con \u2018centr\u2019 en el nombre")+'</b> &middot; '+
+    'Inventarios: <b>'+(dbg.inv? esc(dbg.inv) : "no se encontr&oacute; ninguna columna con \u2018centr\u2019 en el nombre")+'</b>. '+
+    'Si ese nombre no es realmente la columna de Centro de Costo de tu Excel, ah&iacute; est&aacute; el problema.</div>'+
     rowsHTML("Compras", tally(FILTERED.compras)) + rowsHTML("Inventarios", tally(FILTERED.inv));
 }
 </script><script>
